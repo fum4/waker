@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -24,6 +25,23 @@ func (d *Duration) UnmarshalYAML(node *yaml.Node) error {
 	v, err := time.ParseDuration(node.Value)
 	if err != nil {
 		return fmt.Errorf("line %d: invalid duration %q (want e.g. 10s, 5m, 1h)", node.Line, node.Value)
+	}
+	*d = Duration(v)
+	return nil
+}
+
+// MarshalJSON renders the duration as a string like "10s".
+func (d Duration) MarshalJSON() ([]byte, error) { return json.Marshal(d.String()) }
+
+// UnmarshalJSON parses a duration string like "10s".
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("duration must be a string like 10s: %w", err)
+	}
+	v, err := time.ParseDuration(s)
+	if err != nil {
+		return fmt.Errorf("invalid duration %q (want e.g. 10s, 5m, 1h)", s)
 	}
 	*d = Duration(v)
 	return nil
