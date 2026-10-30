@@ -19,7 +19,7 @@ func TestWakeThenProxy(t *testing.T) {
 	if resp.StatusCode != 503 || resp.Header.Get("X-Robots-Tag") != "noindex" || resp.Header.Get("Retry-After") != "10" {
 		t.Fatalf("first request = %d %v", resp.StatusCode, resp.Header)
 	}
-	contains(t, body, "Starting the servers")
+	contains(t, body, "Powering up")
 	contains(t, body, `<p class="name">shop</p>`)
 	l.waitUp(t)
 

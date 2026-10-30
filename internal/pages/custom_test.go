@@ -53,7 +53,7 @@ func TestCustomPages(t *testing.T) {
 func TestCustomPagesLeaveTheOthersBuiltIn(t *testing.T) {
 	p := mustNew(t, customApp(t, "shop", "", map[string]string{Offline: "<p>closed</p>"}))
 	html, _ := p.Render(Starting)
-	if !bytes.Contains(html, []byte("Starting the servers")) || bytes.Count(html, []byte(WaitTag)) != 1 {
+	if !bytes.Contains(html, []byte("Powering up")) || bytes.Count(html, []byte(WaitTag)) != 1 {
 		t.Fatalf("built-in starting page changed: %s", html)
 	}
 	if html, _ = p.Render(Offline); string(html) != "<p>closed</p>" {

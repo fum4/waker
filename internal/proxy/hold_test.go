@@ -104,7 +104,7 @@ func TestHeldThroughAColdBoot(t *testing.T) {
 func TestBrowserGetsTheStartingPageByDefault(t *testing.T) {
 	l, _ := slowLive(t, nil)
 	r := <-l.async(t, "GET", "/", "", "Accept", htmlAccept)
-	if r.status != http.StatusServiceUnavailable || !strings.Contains(r.body, "Starting the servers") {
+	if r.status != http.StatusServiceUnavailable || !strings.Contains(r.body, "Powering up") {
 		t.Fatalf("= %+v", r)
 	}
 }

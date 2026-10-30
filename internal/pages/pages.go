@@ -33,7 +33,7 @@ const (
 // copyText is each page's title and line. Visitor copy never names the
 // waker or calls the app a demo.
 var copyText = map[string][2]string{
-	Starting: {"Starting the servers", "This takes a moment — the app will open by itself."},
+	Starting: {"Powering up", "This takes a moment — the app will open by itself."},
 	Offline:  {"This app is offline", "It isn't running right now."},
 	Busy:     {"The server is busy", "It can't start the app right now. Try again in a few minutes."},
 	Failed:   {"Couldn't start the app", "Something went wrong while starting it. Try again in a moment."},
