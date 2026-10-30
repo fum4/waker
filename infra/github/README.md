@@ -25,7 +25,7 @@ the same PR**, or every PR waits on a check that never reports. Never add
 - **R2 state**: bucket `waker-backup` (EU), key `terraform/github.tfstate`, with the
   `AWS_*` keys of the R2 token `waker-terraform-state` from
   `secrets/waker-terraform-state.env.age` (devbox `docs/repo-secrets.md` § Infra
-  state). Until that bucket and token exist, see the root `TODO.md`.
+  state). Applied 2026-10-30 (ruleset id 26209232).
 
 ## Run
 
