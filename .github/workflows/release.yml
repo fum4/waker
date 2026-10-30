@@ -1,10 +1,7 @@
 # A v* tag cuts a release: goreleaser builds linux and darwin, amd64 and
-# arm64 (.goreleaser.yaml), and publishes them with SHA256SUMS as a GitHub
-# Release.
-#
-# TODO(release-site): upload to releases.nomadware.io (R2) and sign the
-# artifacts — waits on the owner's go for the releases site
-# (docs/work/backlog.md § Release site upload and signing).
+# arm64 (.goreleaser.yaml) and publishes them with SHA256SUMS as a GitHub
+# Release; fum4/releases then signs the bare binaries and publishes them to
+# releases.nomadware.io, where the README's install.sh fetches them.
 name: release
 
 on:
@@ -35,3 +32,18 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The publisher only accepts files named waker-<linux|darwin>-<amd64|arm64>.
+      - name: Stage binaries for releases.nomadware.io
+        run: |
+          mkdir -p dist/release
+          jq -r '.[] | select(.type == "Binary") | "\(.path) \(.goos)-\(.goarch)"' dist/artifacts.json |
+            while read -r p t; do cp "$p" "dist/release/waker-$t"; done
+          ls dist/release
+      - uses: fum4/releases@903963367cf5ad689e0592287d11d80e16db4518 # v1
+        with:
+          package: waker
+          version: ${{ github.ref_name }}
+          dist: dist/release
+          signing-key: ${{ secrets.RELEASES_SIGNING_KEY }}
+          r2-access-key-id: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
