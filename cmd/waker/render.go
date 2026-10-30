@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/fum4/waker/internal/app"
@@ -28,6 +29,12 @@ func renderStatus(w io.Writer, s app.Snapshot, now time.Time) {
 		act += " · idle stop in " + ago(s.IdleIn.D())
 	}
 	line(w, "activity", act)
+	if len(s.DependsOn) > 0 {
+		line(w, "needs", strings.Join(s.DependsOn, ", "))
+	}
+	if len(s.KeptUpBy) > 0 {
+		line(w, "needed by", strings.Join(s.KeptUpBy, ", ")+" · kept up, no idle stop or eviction")
+	}
 	prio := fmt.Sprintf("%g", s.Priority)
 	if e := s.Evicted; e != nil {
 		prio += fmt.Sprintf(" · last evicted by %s (p%g) %s ago", e.By, e.Priority, ago(now.Sub(e.At)))
