@@ -11,8 +11,20 @@ import (
 
 var timeZero time.Time
 
-// Stop records what OnStop needs (the memory peak), then runs the stop.
+// Stop stops the app unconditionally (mode off, shutdown). Requests that
+// arrive meanwhile wait for it, then find the app down.
 func (a *App) Stop(why string) {
+	a.activity.BeginStop()
+	a.stopCommitted(why)
+}
+
+// stopCommitted runs a stop already committed in the tracker. It records
+// what OnStop needs (the memory peak) first, and holds the lifecycle lock so
+// a new boot cannot start until the old process is fully gone.
+func (a *App) stopCommitted(why string) {
+	defer a.activity.EndStop()
+	a.life.Lock()
+	defer a.life.Unlock()
 	if a.d.OnStop != nil {
 		a.d.OnStop(a)
 	}
@@ -25,14 +37,18 @@ func (a *App) Stop(why string) {
 	}
 }
 
-// Evict stops the app to make room for by, recording who did it. The idle
+// Evict stops the app to make room for by, recording who did it, unless a
+// request arrived since it was picked (then it returns false). The idle
 // clock stays disarmed until the app's next activity.
-func (a *App) Evict(by *App) {
-	a.activity.Disarm()
+func (a *App) Evict(by *App) bool {
+	if !a.activity.TryStop() {
+		return false
+	}
 	a.mu.Lock()
 	a.evicted = &Eviction{By: by.Name(), Priority: by.Priority(), At: a.d.Clock.Now().UTC().Truncate(time.Second)}
 	a.mu.Unlock()
-	a.Stop(fmt.Sprintf("evicted by %s (p%g)", by.Name(), by.Priority()))
+	a.stopCommitted(fmt.Sprintf("evicted by %s (p%g)", by.Name(), by.Priority()))
+	return true
 }
 
 // DeadlineIn returns the time left until an idle stop; ok is false when
@@ -59,7 +75,7 @@ func (a *App) Tick() {
 	idle := a.idleLocked()
 	a.mu.Unlock()
 	if a.activity.Expire(idle) {
-		a.Stop("idle " + idle.String())
+		a.stopCommitted("idle " + idle.String())
 	}
 }
 
@@ -77,9 +93,11 @@ func (a *App) SetMode(mode *config.Mode, idle time.Duration) error {
 	a.mu.Lock()
 	a.override = o
 	a.mu.Unlock()
+	var saveErr error
 	if a.d.Persist != nil {
 		if err := a.d.Persist(a.cfg.Name, o); err != nil {
 			a.d.Log.Error("saving the mode override failed", "err", err)
+			saveErr = fmt.Errorf("mode applied but not saved (it will not survive a restart): %w", err)
 		}
 	}
 	a.activity.Touch()
@@ -90,7 +108,7 @@ func (a *App) SetMode(mode *config.Mode, idle time.Duration) error {
 	case config.ModeOn:
 		a.Wake(context.Background())
 	}
-	return nil
+	return saveErr
 }
 
 // Override returns a copy of the active override, or nil.

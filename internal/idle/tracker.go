@@ -2,8 +2,11 @@
 // clock that stops on-demand apps.
 //
 // Activity is measured from the END of a request: Begin raises an in-flight
-// counter, End lowers it and restarts the clock, and no deadline exists while
-// a request is in flight, so an app is never stopped mid-request.
+// counter, End lowers it and restarts the clock in the same critical
+// section, and no deadline exists while a request is in flight, so an app is
+// never stopped mid-request. A stop is committed under the same lock
+// (Expire, TryStop, BeginStop); until EndStop, Begin waits, so no request is
+// forwarded to an app that is going down.
 package idle
 
 import (
@@ -20,44 +23,61 @@ type Tracker struct {
 	notify func()
 
 	mu       sync.Mutex
+	stopped  *sync.Cond // signalled when a stop ends
 	last     time.Time
 	armed    bool
 	inflight int
+	stops    int // stops in progress; overlapping ones (mode off + idle) nest
 }
 
 // NewTracker starts armed, with the last activity at "now". notify is called
 // whenever a deadline may have moved earlier or appeared, so the scheduler
 // re-plans; it must not block.
 func NewTracker(clock Now, notify func()) *Tracker {
-	return &Tracker{clock: clock, notify: notify, last: clock.Now(), armed: true}
+	t := &Tracker{clock: clock, notify: notify, last: clock.Now(), armed: true}
+	t.stopped = sync.NewCond(&t.mu)
+	return t
 }
 
 // Touch records activity now and re-arms a stopped clock.
 func (t *Tracker) Touch() {
 	t.mu.Lock()
-	t.last = t.clock.Now()
-	wasArmed := t.armed
-	t.armed = true
+	wasArmed := t.touchLocked()
 	t.mu.Unlock()
 	if !wasArmed {
 		t.notify()
 	}
 }
 
-// Begin marks a request in flight.
-func (t *Tracker) Begin() {
-	t.mu.Lock()
-	t.inflight++
-	t.mu.Unlock()
-	t.Touch()
+func (t *Tracker) touchLocked() (wasArmed bool) {
+	t.last = t.clock.Now()
+	wasArmed, t.armed = t.armed, true
+	return wasArmed
 }
 
-// End marks a request finished; the idle clock restarts from now.
+// Begin marks a request in flight. While the app is stopping it waits for
+// the stop to finish, so the request then finds the app down and wakes it.
+func (t *Tracker) Begin() {
+	t.mu.Lock()
+	for t.stops > 0 {
+		t.stopped.Wait()
+	}
+	t.inflight++
+	wasArmed := t.touchLocked()
+	t.mu.Unlock()
+	if !wasArmed {
+		t.notify()
+	}
+}
+
+// End marks a request finished; the idle clock restarts from now, in the
+// same critical section, so no tick can see the count drop with a stale
+// last activity.
 func (t *Tracker) End() {
 	t.mu.Lock()
 	t.inflight--
+	t.touchLocked()
 	t.mu.Unlock()
-	t.Touch()
 	t.notify()
 }
 
@@ -92,14 +112,15 @@ func (t *Tracker) DeadlineIn(idle time.Duration) (left time.Duration, ok bool) {
 }
 
 func (t *Tracker) deadlineLocked(idle time.Duration) (time.Duration, bool) {
-	if !t.armed || t.inflight > 0 {
+	if !t.armed || t.inflight > 0 || t.stops > 0 {
 		return 0, false
 	}
 	return max(0, idle-t.clock.Now().Sub(t.last)), true
 }
 
-// Expire disarms the clock and reports true when the idle deadline has
-// passed. It fires once; the next activity re-arms it.
+// Expire commits an idle stop when the deadline has passed: it disarms the
+// clock and marks the app stopping. It fires once; the caller must call
+// EndStop when the stop is done.
 func (t *Tracker) Expire(idle time.Duration) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -107,10 +128,46 @@ func (t *Tracker) Expire(idle time.Duration) bool {
 		return false
 	}
 	t.armed = false
+	t.stops++
 	return true
 }
 
-// Disarm stops the clock until the next activity (used on eviction).
+// TryStop commits a stop only if nothing is in flight (eviction).
+func (t *Tracker) TryStop() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.inflight > 0 || t.stops > 0 {
+		return false
+	}
+	t.armed = false
+	t.stops++
+	return true
+}
+
+// BeginStop marks an unconditional stop (mode off, shutdown).
+func (t *Tracker) BeginStop() {
+	t.mu.Lock()
+	t.stops++
+	t.mu.Unlock()
+}
+
+// EndStop ends a committed stop and releases waiting requests.
+func (t *Tracker) EndStop() {
+	t.mu.Lock()
+	if t.stops--; t.stops == 0 {
+		t.stopped.Broadcast()
+	}
+	t.mu.Unlock()
+}
+
+// Stopping reports whether a stop is in progress.
+func (t *Tracker) Stopping() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.stops > 0
+}
+
+// Disarm stops the clock until the next activity.
 func (t *Tracker) Disarm() {
 	t.mu.Lock()
 	t.armed = false

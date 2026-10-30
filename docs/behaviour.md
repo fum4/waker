@@ -19,6 +19,8 @@
 
 **Browsers get HTML pages, everything else gets JSON.** A request counts as a browser when it has `Sec-Fetch-Mode: navigate`, or is a GET accepting `text/html`. Every other request gets `{"state": "starting"}` and the like. Both use 503 + `Retry-After: 10`, `Cache-Control: no-store` and `X-Robots-Tag: noindex`. An upstream error after connecting gives the down page, with 502.
 
+`/__waker/status` is cached per app for 1 s, with one health probe in flight, so visitor polls never multiply probes (or spawn health commands).
+
 **The starting page polls** `/__waker/status` every 3 s:
 
 - it reloads when the state is `up`;
@@ -45,6 +47,7 @@ Boots are serialised per app: any number of concurrent requests share one boot. 
 - **What counts as activity:** forwarded requests (non-ignored paths), measured from the request's **end**. Also heartbeats, the end of a boot, and mode changes.
 - **No deadline** exists while a request is in flight (long downloads and open WebSockets keep the app up) or while the app boots.
 - **The stop fires once**, then stays disarmed until the next activity. It doesn't consult health: an unhealthy but running app is stopped too.
+- **A stop is committed atomically** with the in-flight check. A request that arrives while the app is stopping waits for the stop to finish, then wakes the app again; it is never forwarded to a process that is going down. A new boot waits until the previous process has fully stopped.
 
 ## Heartbeat
 
@@ -57,7 +60,7 @@ For an app with `heartbeat: true`:
 
 ## Memory
 
-Before every boot, waker compares `/proc/meminfo` MemAvailable with the app's requirement; see [configuration.md § resources](configuration.md#resources).
+Before every boot, waker compares `/proc/meminfo` MemAvailable with the app's requirement, minus what other admitted boots still starting have reserved, so two concurrent boots never count the same free memory; see [configuration.md § resources](configuration.md#resources).
 
 **The learned peak** is measured before each stop and stored in `peaks.json`. It replaces the previous figure, so an app that slims down gets cheaper. It comes from the started process tree's RSS (sampled every 5 s), or from the systemd unit's `MemoryPeak`.
 

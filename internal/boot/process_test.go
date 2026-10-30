@@ -51,6 +51,27 @@ func TestForegroundStartIsStoppedBySignallingItsGroup(t *testing.T) {
 	}
 }
 
+// Nit: children orphaned by a leader that already exited still get SIGTERM
+// and the stop_timeout grace, not an immediate SIGKILL.
+func TestOrphanedChildrenGetTheGracePeriod(t *testing.T) {
+	a := testApp(t, "sh", "-c", "(trap 'sleep 0.2; touch graceful; exit 0' TERM; while :; do sleep 0.05; done) & exit 0")
+	p := New(a)
+	exit, err := p.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := <-exit; err != nil {
+		t.Fatalf("leader exit = %v", err)
+	}
+	time.Sleep(100 * time.Millisecond) // the child installs its trap
+	if err := p.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(a.Cwd, "graceful")); err != nil {
+		t.Fatal("the orphaned child was killed before its grace period")
+	}
+}
+
 func TestStartReportsEarlyExit(t *testing.T) {
 	p := New(testApp(t, "sh", "-c", "exit 3"))
 	exit, err := p.Start()

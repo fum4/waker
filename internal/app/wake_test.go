@@ -146,6 +146,8 @@ type gate struct {
 
 func (g gate) Admit(*App) (func() bool, bool) { return g.makeRoom, g.ok }
 
+func (gate) Release(*App) {}
+
 func TestGateRefusalIsBusy(t *testing.T) {
 	f := newFixture(t, nil)
 	f.app.d.Gate = gate{ok: false}

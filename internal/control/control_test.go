@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -62,20 +63,35 @@ func TestSocketIsPrivate(t *testing.T) {
 	}
 }
 
-func TestASecondWakerIsRefusedAStaleSocketReplaced(t *testing.T) {
+func TestASecondWakerIsRefusedAStaleSocketReplacedAFileKept(t *testing.T) {
 	_, _, path := serve(t)
 	if _, err := Listen(path); err == nil || !strings.Contains(err.Error(), "another waker") {
 		t.Fatalf("second Listen = %v", err)
 	}
-	stale := filepath.Join(t.TempDir(), "stale.sock")
-	if err := os.WriteFile(stale, nil, 0o600); err != nil {
+	dir := t.TempDir()
+	stale := filepath.Join(dir, "stale.sock")
+	old, err := net.Listen("unix", stale)
+	if err != nil {
 		t.Fatal(err)
 	}
+	old.(*net.UnixListener).SetUnlinkOnClose(false)
+	old.Close() // a dead waker's socket file stays behind
 	ln, err := Listen(stale)
 	if err != nil {
 		t.Fatalf("stale socket not replaced: %v", err)
 	}
 	ln.Close()
+
+	notSocket := filepath.Join(dir, "precious.txt")
+	if err := os.WriteFile(notSocket, []byte("keep me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Listen(notSocket); err == nil || !strings.Contains(err.Error(), "is not a socket") {
+		t.Fatalf("a regular file was not refused: %v", err)
+	}
+	if b, _ := os.ReadFile(notSocket); string(b) != "keep me" {
+		t.Fatal("the regular file was touched")
+	}
 }
 
 func TestRoundTrips(t *testing.T) {
