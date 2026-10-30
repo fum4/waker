@@ -1,0 +1,31 @@
+# goreleaser v2 config (verified against v2.19.0). Releases are cut by hand
+# for now (`goreleaser release --clean` with a GITHUB_TOKEN); there is
+# deliberately no CI workflow yet.
+version: 2
+
+project_name: waker
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: ./cmd/waker
+    binary: waker
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/fum4/waker/internal/version.Version={{ .Version }}
+
+archives:
+  - formats: [tar.gz]
+    files: [LICENSE, README.md, CHANGELOG.md, docs/*, examples/*]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+  sort: asc

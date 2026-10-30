@@ -1,0 +1,40 @@
+# A sample waker config: two apps on one small host.
+# Validate with `waker check --config examples/waker.yaml`.
+
+state_dir: ~/.local/state/waker
+
+resources:
+  headroom: {curve: linear, max: 2GiB, min: 256MiB} # a small box: smaller headroom
+  eviction:
+    protect: [docs]
+
+branding:
+  # logo: ./logo.svg     # an SVG or PNG; the built-in mark when omitted
+  accent: "#5ad1ff"
+  name: Example Co
+
+apps:
+  # A tiny static site: Python's built-in server, woken on demand.
+  - name: docs
+    listen: 127.0.0.1:8080
+    upstream: http://127.0.0.1:3000
+    start: [python3, -m, http.server, "3000", --bind, 127.0.0.1]
+    cwd: ./site
+    idle: 10m
+    priority: 8
+    memory: 64MiB
+
+  # A heavier app managed by systemd: waker asks systemd to start and stop
+  # it, and learns its memory peak from the unit.
+  - name: notebook
+    listen: 127.0.0.1:8081
+    upstream: http://127.0.0.1:8888
+    start: [systemctl, --user, start, notebook.service]
+    stop: [systemctl, --user, stop, notebook.service]
+    health: {path: /api/status}
+    idle: 30m
+    idle_ignore: [/api/kernels]   # its own polling is not a visitor
+    priority: 3.5
+    memory: 1500MiB
+    memory_source: systemd
+    systemd_unit: notebook.service

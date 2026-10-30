@@ -61,6 +61,14 @@ func TestCheck(t *testing.T) {
 	}
 }
 
+// The shipped example must stay valid as the config model evolves.
+func TestTheExampleConfigIsValid(t *testing.T) {
+	code, stdout, stderr := runCLI("check", "--config", "../../examples/waker.yaml")
+	if code != 0 || !strings.Contains(stdout, "ok — 2 app(s)") {
+		t.Fatalf("check examples/waker.yaml = %d\n%s%s", code, stdout, stderr)
+	}
+}
+
 func writeFile(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
