@@ -50,7 +50,7 @@ Each key below shows its default in the comment; leave out any key you don't cha
 ```yaml
 # ── top level ────────────────────────────────────────────────────────────
 state_dir: ~/.local/state/waker     # default $XDG_STATE_HOME/waker, else ~/.local/state/waker
-control_socket: ~/.local/state/waker/control.sock # default $XDG_RUNTIME_DIR/waker/control.sock, else <state_dir>/control.sock
+control_socket: ~/.local/state/waker/control.sock # default $WAKER_CONTROL_SOCKET, else $XDG_RUNTIME_DIR/waker/control.sock, else <state_dir>/control.sock
 
 # ── defaults: any apps[] key except name, listen, upstream, start, stop ──
 defaults:                           # default: none · app value > defaults > built-in
@@ -133,7 +133,7 @@ Sizes take a unit (`512MiB`, `2GiB`, `768M`; `0` needs none). Durations are Go d
 | Key | Default | Meaning |
 |---|---|---|
 | `state_dir` | `$XDG_STATE_HOME/waker`, else `~/.local/state/waker` | Runtime mode overrides and learned memory peaks. |
-| `control_socket` | `$XDG_RUNTIME_DIR/waker/control.sock`, else `<state_dir>/control.sock` | The CLI's unix socket. |
+| `control_socket` | `$WAKER_CONTROL_SOCKET`, else `$XDG_RUNTIME_DIR/waker/control.sock`, else `<state_dir>/control.sock` | The CLI's unix socket ([`--system`](#as-a-service): `/run/waker/control.sock`). |
 | `resources` | see below | Memory policy. |
 | `defaults` | – | App keys every app inherits. |
 | `apps` | required | One entry per app. |
@@ -250,6 +250,7 @@ From source: `go install github.com/fum4/waker/cmd/waker@latest`.
 - **Restarts.** waker restarts after a crash; `systemctl stop` / `launchctl bootout` leave it stopped.
 - **Linger (Linux).** A user unit stops when your last session ends unless linger is on. install and status print the exact `sudo loginctl enable-linger <you>` line; waker never runs sudo itself.
 - **Root.** `--system` needs root. Without it, install prints the `sudo …` line to run, with your PATH and user filled in.
+- **Control socket (`--system`, Linux).** A system service has no `XDG_RUNTIME_DIR` to share with your shell, so it listens on `/run/waker/control.sock` (`RuntimeDirectory=waker`). The CLI falls back to that socket when nothing listens on its default, and `waker status` ends with the socket it used.
 - **Ownership.** Every file carries a "Written by `waker service install`" marker. install never overwrites a unit you wrote yourself, and uninstall never removes one, without `--force`.
 - **Elsewhere** (no systemd, other OSes) install refuses and prints the command, PATH and restart policy to set up by hand.
 

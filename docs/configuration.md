@@ -15,7 +15,7 @@ Unknown keys are errors, so typos fail loudly. `waker check` validates the file 
 | Key | Default | Meaning |
 |---|---|---|
 | `state_dir` | `$XDG_STATE_HOME/waker`, else `~/.local/state/waker` | Holds `modes.json` (runtime mode overrides) and `peaks.json` (learned memory peaks). Created 0700. |
-| `control_socket` | `$XDG_RUNTIME_DIR/waker/control.sock`, else `<state_dir>/control.sock` | The CLI's unix socket. Its directory is 0700 and the socket 0600. |
+| `control_socket` | `$WAKER_CONTROL_SOCKET`, else `$XDG_RUNTIME_DIR/waker/control.sock`, else `<state_dir>/control.sock` | The CLI's unix socket. Its directory is 0700 and the socket 0600. A `--system` service listens on `/run/waker/control.sock` (its `RuntimeDirectory`, via `WAKER_CONTROL_SOCKET`); when the file leaves this key out and nothing listens on the default, the CLI falls back to that socket, and `waker status` ends with the one it used. |
 | `resources` | see below | Memory policy. |
 | `defaults` | – | App keys every app inherits; see below. |
 | `apps` | required | One entry per app. |

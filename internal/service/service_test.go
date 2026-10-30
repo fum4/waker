@@ -68,8 +68,10 @@ func TestSystemdUserInstall(t *testing.T) {
 			t.Errorf("unit lacks %q:\n%s", want, unit)
 		}
 	}
-	if strings.Contains(unit, "User=") {
-		t.Error("a user unit must not set User=")
+	for _, never := range []string{"User=", "RuntimeDirectory", "WAKER_CONTROL_SOCKET"} {
+		if strings.Contains(unit, never) {
+			t.Errorf("a user unit sets %s (its XDG_RUNTIME_DIR is the shell's)", never)
+		}
 	}
 	var cmds []string
 	for _, c := range p.Post {
@@ -103,7 +105,11 @@ func TestSystemdSystemInstall(t *testing.T) {
 	if want := filepath.Join(h.Root, "etc", "systemd", "system", "waker.service"); p.Unit != want {
 		t.Fatalf("unit = %s, want %s", p.Unit, want)
 	}
-	for _, want := range []string{"User=ana", "WantedBy=multi-user.target"} {
+	for _, want := range []string{
+		"User=ana", "WantedBy=multi-user.target",
+		"RuntimeDirectory=waker\nRuntimeDirectoryMode=0750\n",
+		`Environment="WAKER_CONTROL_SOCKET=/run/waker/control.sock"`,
+	} {
 		if !strings.Contains(p.Files[0].Content, want) {
 			t.Errorf("unit lacks %q", want)
 		}

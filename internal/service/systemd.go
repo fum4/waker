@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/fum4/waker/internal/config"
 )
 
 // UnitName is the systemd unit install writes.
@@ -109,8 +111,13 @@ func renderUnit(sp Spec) string {
 	// The supervisor's PATH is minimal; the installer's PATH is what the
 	// start commands (npm, python3, …) were found on.
 	fmt.Fprintf(&b, "Environment=%s\n", unitQuote("PATH="+sp.PATH, false))
-	if sp.System && sp.RunAs != "" {
-		fmt.Fprintf(&b, "User=%s\n", sp.RunAs)
+	if sp.System {
+		if sp.RunAs != "" {
+			fmt.Fprintf(&b, "User=%s\n", sp.RunAs)
+		}
+		// No XDG_RUNTIME_DIR here: a fixed socket the CLI falls back to.
+		b.WriteString("RuntimeDirectory=waker\nRuntimeDirectoryMode=0750\n")
+		fmt.Fprintf(&b, "Environment=%s\n", unitQuote(config.EnvControlSocket+"="+config.SystemControlSocket, false))
 	}
 	b.WriteString("Restart=on-failure\nRestartSec=2\n")
 	b.WriteString("# SIGTERM lets waker drain connections and stop the apps it started.\n")
