@@ -31,7 +31,7 @@ func ResolvePath(flag string) string {
 }
 
 // Load reads, defaults and validates the config file at path. Relative paths
-// inside it (logo, cwd, state_dir, control_socket) resolve against the
+// inside it (logo, pages, cwd, state_dir, control_socket) resolve against the
 // file's directory.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -162,6 +162,9 @@ func (c *Config) resolvePaths(base string) {
 		}
 		if a.Branding.Logo != "" {
 			a.Branding.Logo = resolvePath(base, a.Branding.Logo)
+		}
+		for k, f := range a.Pages.Files {
+			a.Pages.Files[k] = resolvePath(base, f)
 		}
 	}
 }
