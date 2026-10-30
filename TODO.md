@@ -7,12 +7,11 @@ Things only the owner can do. Clear and delete each one when done.
 Until it's applied, GitHub reports no required checks and `wt merge` refuses every PR
 to `master`. Needed once, in this order:
 
-1. **R2 bucket** — Cloudflare dashboard → R2 Object Storage → **Create bucket** →
-   name `waker-backup`, location **Specify jurisdiction → European Union (EU)** →
-   Create. (Out-of-band by doctrine: it holds Terraform's own state.)
-2. **waker age key** — the repo's first secret needs its own key: the agent runs
-   `age-keygen` into `~/.config/age/waker.key`, scaffolds `secrets/` and escrows the
-   key in devbox; you save the private key in Bitwarden as **"waker age key"**.
+1. **R2 bucket** `waker-backup` (EU) — created by the hub with `devbox-r2-bucket-create`;
+   nothing to click.
+2. **waker age key → Bitwarden** — the key exists (`~/.config/age/waker.key`, escrowed
+   in devbox). Over SSH run `cat ~/.config/age/waker.key` and save the whole output
+   in Bitwarden as **"waker age key"** (a secure note).
 3. **R2 token** — R2 Object Storage → **Manage API tokens** → **Create Account API
    token** → name `waker-terraform-state`, permission **Object Read & Write**,
    **Apply to specific buckets only** → `waker-backup`, TTL forever → Create. Leave

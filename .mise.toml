@@ -61,3 +61,28 @@ depends = ["lint", "tf:check"]
 description = "Tests (race, log kept: scripts/test-log.sh) · build before merge (wt pre-merge)"
 depends = ["lint"]
 run = ["scripts/test-log.sh", "go build ./..."]
+
+# ── Secrets (repo-secrets engine; devbox docs/repo-secrets.md) ─────────────
+[tasks."secrets:decrypt"]
+description = "Materialize file/sshkey secrets, then render the generated env files (with <age>s: only those rows)"
+run = "repo-secrets decrypt"
+
+[tasks."secrets:clean"]
+description = "Remove materialized plaintext a .age restores (--render: also the generated env files; --all: also ~/.ssh keys)"
+run = "repo-secrets clean"
+
+[tasks."secrets:encrypt"]
+description = "Re-encrypt file/sshkey secrets from their plaintext (unchanged ones left alone)"
+run = "repo-secrets encrypt"
+
+[tasks."secrets:render"]
+description = "Regenerate every render-row env file from committed config + secrets"
+run = "repo-secrets render"
+
+[tasks."secrets:edit"]
+description = "Edit one secret in a tmpfs copy, re-encrypt, re-render (mise run secrets:edit <age>)"
+run = "repo-secrets edit"
+
+[tasks."secrets:check"]
+description = "Every manifest row has its sources (exit 1 otherwise)"
+run = "repo-secrets check"
