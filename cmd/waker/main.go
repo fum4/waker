@@ -17,6 +17,12 @@ type command struct {
 	run     func(args []string, stdout, stderr io.Writer) error
 }
 
+// exitCode is an error that only sets the exit code; the command has
+// already printed what it means.
+type exitCode int
+
+func (c exitCode) Error() string { return fmt.Sprintf("exit %d", int(c)) }
+
 // errUsage marks an error whose message is a usage hint; exit code 2.
 var errUsage = errors.New("usage")
 
@@ -27,6 +33,7 @@ func commands() []command {
 		{"mode", "set an app's runtime mode: mode <app> on|off|on-demand [--idle 10s]", runMode},
 		{"reset", "drop an app's runtime mode override", runReset},
 		{"check", "validate the config file and print a summary", runCheck},
+		{"service", "install|uninstall|status: run waker as a systemd or launchd service", runService},
 		{"version", "print the waker version", runVersion},
 	}
 }
@@ -48,7 +55,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 			continue
 		}
 		err := c.run(args[1:], stdout, stderr)
+		var code exitCode
 		switch {
+		case errors.As(err, &code):
+			return int(code)
 		case err == nil:
 			return 0
 		case errors.Is(err, flag.ErrHelp):
@@ -78,8 +88,14 @@ func usage(w io.Writer) {
 
 // newFlagSet builds a subcommand's flag set with the shared --config flag.
 func newFlagSet(name string, stderr io.Writer) (*flag.FlagSet, *string) {
-	fs := flag.NewFlagSet("waker "+name, flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	fs := newBareFlagSet(name, stderr)
 	cfg := fs.String("config", "", "config file (default $WAKER_CONFIG, else ./waker.yaml)")
 	return fs, cfg
+}
+
+// newBareFlagSet builds a subcommand flag set without --config.
+func newBareFlagSet(name string, stderr io.Writer) *flag.FlagSet {
+	fs := flag.NewFlagSet("waker "+name, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	return fs
 }
