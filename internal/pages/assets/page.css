@@ -15,7 +15,7 @@
   --faint: #7c7a91;
   --line-strong: rgba(255, 255, 255, 0.14);
   --sig-glow: color-mix(in srgb, var(--sig) 60%, transparent);
-  --failed: #f2c14e;
+  --failed: #ffd84a;
   --logo-bg: #000;
   --sans: "Geist", system-ui, sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -100,7 +100,7 @@ h1 {
 }
 
 /* The decode line: six 0/1 glyphs and a block cursor. On the starting page each glyph flips at
-   its own offset and the cursor blinks; elsewhere the line is still and faded (amber on failed).
+   its own offset and the cursor blinks; elsewhere the line is still and faded (yellow on failed).
    The starting page animates even under prefers-reduced-motion: it is the progress signal. */
 .decode {
   display: flex;
@@ -129,10 +129,10 @@ h1 {
   background: currentColor;
 }
 
-/* At the shared 0.3 fade amber turns muddy olive on --ink; 0.7 keeps it amber, still calmer
-   than the starting page's full-strength accent. */
+/* At the shared 0.3 fade yellow turns muddy olive on --ink, and even 0.7 dims it to mustard;
+   0.85 keeps it yellow, still calmer than the starting page's full-strength accent. */
 [data-page="failed"] .decode {
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 [data-page="starting"] .decode {
