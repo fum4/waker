@@ -5,6 +5,7 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
 ## [Unreleased]
 
 ### Added
+- CI on GitHub Actions for every PR (`lint`, `test`, `e2e`, `build`), and tagged releases for linux/darwin × amd64/arm64 with `SHA256SUMS`.
 - `waker serve`: a reverse proxy per app that wakes it on the first request. It also provides:
   - modes `on` / `off` / `on-demand`;
   - a deadline-driven idle clock that counts activity from each request's end and never stops an app mid-request;
