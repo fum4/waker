@@ -6,7 +6,7 @@ waker reads one YAML file. It takes the first of these that is set:
 2. `$WAKER_CONFIG`;
 3. `./waker.yaml`.
 
-Unknown keys are errors, so typos fail loudly. `waker check` validates the file and reports every problem at once, each with its field path, e.g. `apps[1] (api).priority: 12 must be a number from 1 to 10`. A bad value inherited from `defaults` is reported once, at its real path (`defaults.idle: must be positive`). `waker check --effective` prints every app's resolved config, defaults applied. Relative paths (`state_dir`, `control_socket`, `branding.logo`, `cwd`) resolve against the config file's directory, and `~/` is expanded.
+Unknown keys are errors, so typos fail loudly. `waker check` validates the file and reports every problem at once, each with its field path, e.g. `apps[1] (api).priority: 12 must be a number from 1 to 10`. A bad value inherited from `defaults` is reported once, at its real path (`defaults.idle: must be positive`). `waker check --effective` prints every app's resolved config, defaults applied. Relative paths (`state_dir`, `control_socket`, `branding.logo`, `pages.*`, `cwd`) resolve against the config file's directory, and `~/` is expanded.
 
 **Sizes** are written like `512MiB`, `2GiB` or `768M`. A unit is required, and the single-letter units are binary too (`1G` = `1GiB`). **Durations** are Go durations: `10s`, `5m`, `1h30m`.
 
@@ -35,7 +35,7 @@ defaults:
 **Precedence:** the app's own value, then `defaults`, then the built-in default.
 
 - **Scalars** (`idle`, `mode`, `priority`, …): the app's value wins.
-- **Maps** (`health`, `branding`, `env`) merge per key: an app with `branding: {accent: "#f36"}` keeps the default `name` and `logo`. In `health`, `path` and `command` are one choice: an app that sets either inherits neither.
+- **Maps** (`health`, `branding`, `env`, `pages`) merge per key: an app with `branding: {accent: "#f36"}` keeps the default `name` and `logo`. In `health`, `path` and `command` are one choice: an app that sets either inherits neither. In `pages`, `bare` and a map don't merge: the app's value wins whole.
 - **Lists** (`idle_ignore`): the app's list replaces the default one; `[]` clears it.
 
 ## `apps[]`
@@ -65,6 +65,7 @@ defaults:
 | `headroom` | – | An absolute headroom for this app, replacing the curve. |
 | `evictable` | `true` | `false` means this app is never evicted. |
 | `branding` | see below | The look of this app's visitor pages; usually set once in `defaults`. |
+| `pages` | built-in | Your own HTML file per visitor page, or `bare` for status and headers only; see below. |
 
 ## `resources`
 
@@ -114,3 +115,35 @@ resources:
 | `logo` | a neutral built-in mark | An SVG or PNG file, read at start and served at `/__waker/logo`. |
 | `accent` | `#c6ff4a` | The `#rgb` / `#rrggbb` colour of the starting indicator. |
 | `name` | – | Your brand: the logo's alt text. |
+
+## `pages` (per app, or in `defaults`)
+
+Replace any of the built-in visitor pages with your own HTML file:
+
+```yaml
+pages:
+  starting: ./pages/starting.html   # starting | offline | busy | failed | down
+  offline: ./pages/offline.html     # pages you leave out stay built-in
+```
+
+Each file is read once at start. `waker check` fails if one is missing, unreadable, a directory or over 1 MiB, naming the key (`apps[0] (web).pages.starting: open …: no such file or directory`, or `defaults.pages.starting: …` when inherited). A custom page is served with the same status and headers as the built-in one (503 or 502, `text/html`, `no-store`, `noindex`).
+
+Three placeholders are replaced, HTML-escaped; nothing else in the file is touched (it is not a template):
+
+| Placeholder | Becomes |
+|---|---|
+| `{{name}}` | The app's name. |
+| `{{logo}}` | `/__waker/logo`, the app's `branding.logo`. |
+| `{{accent}}` | `branding.accent`, else `#c6ff4a`. |
+
+```html
+<!doctype html><html><head><meta charset="utf-8"><title>{{name}} is starting</title></head>
+<body style="background:#111;color:#eee">
+  <img src="{{logo}}" alt="" width="48">
+  <h1 style="color:{{accent}}">Waking {{name}}…</h1>
+</body></html>
+```
+
+**The starting page opens the app by itself:** waker inserts `<script src="/__waker/wait.js" defer></script>` before its last `</body>` (or at the end), unless the file already loads `/__waker/wait.js`. When the boot fails or is refused, the script reloads once, so the visitor gets that state's page. Other pages get no script.
+
+**`pages: bare`** drops every page and JSON body for the app: visitors get the status code and headers alone (`Content-Length: 0`, `Cache-Control: no-store`, `X-Robots-Tag: noindex`, `Retry-After` on 503). `/__waker/*` still answers. Use it when something in front of waker renders its own error pages.

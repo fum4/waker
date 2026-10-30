@@ -8,7 +8,7 @@
    |---|---|
    | `POST active` | The heartbeat: counts as activity, 204. |
    | `status` | `{"state": …}` for this app only. |
-   | `font.woff2`, `logo`, `heartbeat.js` | The page assets, cacheable for an hour. |
+   | `font.woff2`, `logo`, `heartbeat.js`, `wait.js` | The page assets, cacheable for an hour. |
    | anything else | 404. |
 
 2. **Mode `off`:** the offline page, with 503.
@@ -24,10 +24,12 @@
 
 `/__waker/status` is cached per app for 1 s, with one health probe in flight, so visitor polls never multiply probes (or spawn health commands).
 
-**The starting page polls** `/__waker/status` every 3 s:
+**The starting page polls** `/__waker/status` every 3 s, through `/__waker/wait.js` (the built-in page loads it; a [custom starting page](configuration.md#pages-per-app-or-in-defaults) gets it injected):
 
 - it reloads when the state is `up`;
-- it switches in place to the busy or failed copy if the boot ends that way.
+- if the boot ends busy or failed, the built-in page switches in place to that copy, and a custom page reloads once to show that state's page.
+
+With [`pages: bare`](configuration.md#pages-per-app-or-in-defaults), every page and JSON answer above is the status and headers alone.
 
 **Connection cap:** each app's listener accepts at most 64 concurrent connections. Beyond that, a connection gets an immediate 503 `{"state":"busy"}`.
 
