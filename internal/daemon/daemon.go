@@ -6,6 +6,7 @@ package daemon
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -31,7 +32,7 @@ const ShutdownTimeout = 5 * time.Second
 type Daemon struct {
 	cfg   *config.Config
 	log   *slog.Logger
-	pages *pages.Pages
+	pages map[string]*pages.Pages // per app: each has its own branding
 	sig   idle.Signal
 	all   []*app.App
 	procs map[string]*boot.Process
@@ -49,12 +50,15 @@ type Daemon struct {
 
 // New builds the apps; it binds nothing yet.
 func New(cfg *config.Config, log *slog.Logger) (*Daemon, error) {
-	pg, err := pages.New(cfg.Branding)
-	if err != nil {
-		return nil, err
-	}
-	d := &Daemon{cfg: cfg, log: log, pages: pg, sig: idle.NewSignal(), skipped: map[string]string{},
+	d := &Daemon{cfg: cfg, log: log, pages: map[string]*pages.Pages{}, sig: idle.NewSignal(), skipped: map[string]string{},
 		procs: map[string]*boot.Process{}, avail: memory.NewMeminfo()}
+	for _, ac := range cfg.Apps {
+		pg, err := pages.New(ac.Branding)
+		if err != nil {
+			return nil, fmt.Errorf("app %s: %w", ac.Name, err)
+		}
+		d.pages[ac.Name] = pg
+	}
 	d.overrides = d.loadOverrides()
 	gate := d.newGate()
 	for _, ac := range cfg.Apps {
@@ -125,7 +129,7 @@ func (d *Daemon) listen() []*http.Server {
 			d.skipped[ac.Name] = err.Error()
 			continue
 		}
-		h, err := proxy.New(a, d.pages, d.log)
+		h, err := proxy.New(a, d.pages[ac.Name], d.log)
 		if err != nil {
 			ln.Close()
 			d.skipped[ac.Name] = err.Error()

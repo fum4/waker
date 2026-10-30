@@ -69,6 +69,19 @@ func TestTheExampleConfigIsValid(t *testing.T) {
 	}
 }
 
+func TestCheckEffective(t *testing.T) {
+	code, stdout, stderr := runCLI("check", "--effective", "--config", "../../examples/waker.yaml")
+	// docs inherits idle and branding from defaults; notebook overrides idle.
+	for _, want := range []string{"name: docs", "idle: 10m0s", "accent: '#5ad1ff'", "name: notebook", "idle: 30m0s", "priority: 8", "heartbeat: true"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("effective output lacks %q", want)
+		}
+	}
+	if code != 0 {
+		t.Fatalf("check --effective = %d\n%s%s", code, stdout, stderr)
+	}
+}
+
 func writeFile(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {

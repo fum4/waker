@@ -63,9 +63,9 @@ func TestValidateNamesTheField(t *testing.T) {
 		{"bad order", func(c *Config) { c.Resources.Eviction.Order = "random" }, "resources.eviction.order"},
 		{"protect unknown", func(c *Config) { c.Resources.Eviction.Protect = []string{"ghost"} }, `resources.eviction.protect: [0] "ghost" is not a configured app`},
 		{"other available source", func(c *Config) { c.Resources.AvailableSource = "vm_stat" }, "resources.available_source"},
-		{"bad accent", func(c *Config) { c.Branding.Accent = "lime" }, "branding.accent"},
-		{"logo ext", func(c *Config) { c.Branding.Logo = "/tmp/logo.gif" }, "branding.logo: /tmp/logo.gif must be"},
-		{"logo missing", func(c *Config) { c.Branding.Logo = "/nonexistent/logo.svg" }, "branding.logo:"},
+		{"bad accent", func(c *Config) { c.Apps[0].Branding.Accent = "lime" }, "apps[0] (web).branding.accent"},
+		{"logo ext", func(c *Config) { c.Apps[0].Branding.Logo = "/tmp/logo.gif" }, "apps[0] (web).branding.logo: /tmp/logo.gif must be"},
+		{"logo missing", func(c *Config) { c.Apps[0].Branding.Logo = "/nonexistent/logo.svg" }, "apps[0] (web).branding.logo:"},
 		{"dup name", func(c *Config) {
 			b := c.Apps[0]
 			b.Listen = "127.0.0.1:8081"
@@ -105,7 +105,7 @@ func TestValidateAcceptsLogoFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := validConfig()
-	cfg.Branding = Branding{Logo: logo, Accent: "#c6f432", Name: "Acme"}
+	cfg.Apps[0].Branding = Branding{Logo: logo, Accent: "#c6f432", Name: "Acme"}
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}

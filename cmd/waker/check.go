@@ -11,6 +11,7 @@ import (
 
 func runCheck(args []string, stdout, stderr io.Writer) error {
 	fs, cfgFlag := newFlagSet("check", stderr)
+	effective := fs.Bool("effective", false, "print each app's resolved config (defaults applied) as YAML")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -20,6 +21,14 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	path := config.ResolvePath(*cfgFlag)
 	cfg, err := config.Load(path)
 	if err != nil {
+		return err
+	}
+	if *effective {
+		out, err := cfg.EffectiveYAML()
+		if err != nil {
+			return err
+		}
+		_, err = stdout.Write(out)
 		return err
 	}
 	fmt.Fprintf(stdout, "%s: ok — %d app(s), headroom curve %s, eviction %s\n",
