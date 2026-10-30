@@ -55,7 +55,7 @@ defaults:
 | `boot_timeout` | `600s` | A boot that isn't healthy by then fails. A failed boot answers "failed" for 120 s before the next request may retry. |
 | `waiting` | `page` | What a browser gets while the app boots: `page` (the starting page at once) or `hold` (the request waits for the app, like a program's). Programs are always held; see [behaviour.md](behaviour.md#a-request-step-by-step). |
 | `hold_timeout` | `60s`, or `boot_timeout` if shorter | How long a held request waits. Then a browser gets the failed page and a program 503 `{"state":"starting"}`; the boot carries on. Set explicitly, it may not exceed `boot_timeout`. |
-| `mode` | `on-demand` | `on`, `off` or `on-demand`. Quote `"on"` and `"off"`, or YAML may read them as booleans. |
+| `mode` | `on-demand` | `on`, `off` or `on-demand`. Bare `on` and `off` work: waker reads YAML 1.2, where they are strings. A YAML 1.1 tool (PyYAML, yq v3) that rewrites the file may turn them into `true` / `false`; `waker check` then says which one to write back. |
 | `idle` | `30m` | On-demand only: stop after this long without activity. |
 | `idle_ignore` | `[]` | Exact paths (query excluded) that are neither activity nor a reason to wake, e.g. a version poller. |
 | `heartbeat` | `true` | Inject the heartbeat script into the app's HTML pages. |
