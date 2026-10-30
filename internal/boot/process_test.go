@@ -27,8 +27,27 @@ func testApp(t *testing.T, start ...string) config.App {
 	return a
 }
 
+// waitForFile waits until path exists (a child's "I'm ready" marker).
+func waitForFile(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s never appeared", path)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func TestForegroundStartIsStoppedBySignallingItsGroup(t *testing.T) {
-	p := New(testApp(t, "sh", "-c", "sleep 30 & sleep 30"))
+	a := testApp(t, "sh", "-c", "sleep 30 & sleep 30")
+	// No SIGKILL escalation within the test's lifetime: Stop returns only
+	// because SIGTERM ended the whole group (a regression hangs, not flakes).
+	a.StopTimeout = config.Duration(time.Hour)
+	p := New(a)
 	exit, err := p.Start()
 	if err != nil {
 		t.Fatal(err)
@@ -36,12 +55,8 @@ func TestForegroundStartIsStoppedBySignallingItsGroup(t *testing.T) {
 	if p.PID() == 0 {
 		t.Fatal("no pid while running")
 	}
-	start := time.Now()
 	if err := p.Stop(context.Background()); err != nil {
 		t.Fatal(err)
-	}
-	if time.Since(start) > time.Second {
-		t.Fatalf("SIGTERM should end sleep at once, took %v", time.Since(start))
 	}
 	if err := <-exit; err == nil {
 		t.Fatal("a signalled start command should report a non-nil exit")
@@ -54,7 +69,8 @@ func TestForegroundStartIsStoppedBySignallingItsGroup(t *testing.T) {
 // Nit: children orphaned by a leader that already exited still get SIGTERM
 // and the stop_timeout grace, not an immediate SIGKILL.
 func TestOrphanedChildrenGetTheGracePeriod(t *testing.T) {
-	a := testApp(t, "sh", "-c", "(trap 'sleep 0.2; touch graceful; exit 0' TERM; while :; do sleep 0.05; done) & exit 0")
+	a := testApp(t, "sh", "-c", "(trap 'sleep 0.2; touch graceful; exit 0' TERM; touch trapped; while :; do sleep 0.05; done) & exit 0")
+	a.StopTimeout = config.Duration(time.Hour) // the trap, however slow, ends the group first
 	p := New(a)
 	exit, err := p.Start()
 	if err != nil {
@@ -63,7 +79,7 @@ func TestOrphanedChildrenGetTheGracePeriod(t *testing.T) {
 	if err := <-exit; err != nil {
 		t.Fatalf("leader exit = %v", err)
 	}
-	time.Sleep(100 * time.Millisecond) // the child installs its trap
+	waitForFile(t, filepath.Join(a.Cwd, "trapped")) // the child installed its trap
 	if err := p.Stop(context.Background()); err != nil {
 		t.Fatal(err)
 	}

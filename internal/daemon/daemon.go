@@ -52,6 +52,11 @@ type Daemon struct {
 
 // New builds the apps; it binds nothing yet.
 func New(cfg *config.Config, log *slog.Logger) (*Daemon, error) {
+	return newWithClock(cfg, log, clock.Real{})
+}
+
+// newWithClock is New with the apps' clock injected (tests use a Fake).
+func newWithClock(cfg *config.Config, log *slog.Logger, clk clock.Clock) (*Daemon, error) {
 	d := &Daemon{cfg: cfg, log: log, pages: map[string]*pages.Pages{}, sig: idle.NewSignal(), skipped: map[string]string{},
 		procs: map[string]*boot.Process{}, avail: memory.NewMeminfo()}
 	for _, ac := range cfg.Apps {
@@ -71,7 +76,7 @@ func New(cfg *config.Config, log *slog.Logger) (*Daemon, error) {
 		proc := boot.New(ac)
 		d.procs[ac.Name] = proc
 		d.all = append(d.all, app.New(ac, app.Deps{
-			Clock:   clock.Real{},
+			Clock:   clk,
 			Process: proc,
 			Gate:    gate,
 			Notify:  d.sig.Notify,

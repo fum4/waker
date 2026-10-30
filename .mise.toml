@@ -21,8 +21,8 @@ run = [
 ]
 
 [tasks.test]
-description = "Unit + integration tests with the race detector"
-run = "go test -race ./..."
+description = "Unit + integration tests (race); full -json log in ~/.local/state/waker-tests"
+run = "scripts/test-log.sh"
 
 [tasks.build]
 description = "Build the waker binary into ./bin"
@@ -35,6 +35,6 @@ description = "Static checks: gofmt · go vet · staticcheck"
 depends = ["lint"]
 
 [tasks.pre-merge]
-description = "Tests (race) · build before merge (wt pre-merge)"
+description = "Tests (race, log kept: scripts/test-log.sh) · build before merge (wt pre-merge)"
 depends = ["lint"]
-run = ["go test -race ./...", "go build ./..."]
+run = ["scripts/test-log.sh", "go build ./..."]

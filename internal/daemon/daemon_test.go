@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fum4/waker/internal/app"
+	"github.com/fum4/waker/internal/clock"
 	"github.com/fum4/waker/internal/config"
 	"github.com/fum4/waker/internal/control"
 	"github.com/fum4/waker/internal/state"
@@ -45,7 +46,12 @@ func newConfig(t *testing.T, extra string) (*config.Config, string) {
 
 func start(t *testing.T, cfg *config.Config) (*Daemon, *control.Client) {
 	t.Helper()
-	d, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return startWithClock(t, cfg, clock.Real{})
+}
+
+func startWithClock(t *testing.T, cfg *config.Config, clk clock.Clock) (*Daemon, *control.Client) {
+	t.Helper()
+	d, err := newWithClock(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), clk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,9 +140,15 @@ func TestCorruptOrStaleOverridesStartEmpty(t *testing.T) {
 	}
 }
 
+// The idle clock is a Fake: the test moves time and runs the idle step
+// itself, so "on time" is exact instead of a wall-clock window. Run's own
+// loop still ticks, but it can only act on the time the test set.
 func TestIdleOverrideStopsOnTimeNotMidRequest(t *testing.T) {
 	cfg, dir := newConfig(t, "")
-	d, c := start(t, cfg)
+	// The Fake's Sleep advances time per health poll; never time out a boot.
+	cfg.Apps[0].BootTimeout = config.Duration(24 * time.Hour)
+	clk := clock.NewFake()
+	d, c := startWithClock(t, cfg, clk)
 	ctx := context.Background()
 	if _, err := c.SetMode(ctx, control.ModeRequest{App: "shop", Mode: config.ModeOnDemand, Idle: config.Duration(time.Second)}); err != nil {
 		t.Fatal(err)
@@ -145,19 +157,27 @@ func TestIdleOverrideStopsOnTimeNotMidRequest(t *testing.T) {
 	if st := a.Wake(ctx); st != app.Starting {
 		t.Fatalf("wake = %s", st)
 	}
-	waitFor(t, 5*time.Second, func() bool { return a.State(ctx) == app.Up })
+	a.Wait()
+	if st := a.State(ctx); st != app.Up {
+		t.Fatalf("after boot state = %s", st)
+	}
+	up := func() bool { _, err := os.Stat(filepath.Join(dir, "up")); return err == nil }
 
-	a.Activity().Begin() // a request in flight for 2s: no stop meanwhile
-	time.Sleep(2 * time.Second)
-	if _, err := os.Stat(filepath.Join(dir, "up")); err != nil {
+	a.Activity().Begin() // a request in flight past the idle: no stop meanwhile
+	clk.Advance(2 * time.Second)
+	d.step()
+	if !up() {
 		t.Fatal("stopped mid-request")
 	}
 	a.Activity().End()
-	ended := time.Now()
-	waitFor(t, 3*time.Second, func() bool { _, err := os.Stat(filepath.Join(dir, "up")); return err != nil })
-	if took := time.Since(ended); took < time.Second || took > 1500*time.Millisecond {
-		t.Fatalf("idle stop %s after the request ended, want 1s–1.5s", took)
+	clk.Advance(time.Second - time.Millisecond)
+	d.step()
+	if !up() {
+		t.Fatal("stopped before a full idle after the request ended")
 	}
+	clk.Advance(time.Millisecond)
+	d.step()
+	waitFor(t, 5*time.Second, func() bool { return !up() })
 }
 
 func TestShutdownStopsWhatItStarted(t *testing.T) {

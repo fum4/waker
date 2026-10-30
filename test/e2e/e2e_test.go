@@ -184,6 +184,10 @@ func TestLifecycle(t *testing.T) {
 	}
 
 	h.wakeToUp()
+	// Taken before the last proxied request (/html; the logo and status
+	// don't count as activity): the waker's idle clock restarts somewhere
+	// inside that request, never earlier, so this is a true lower bound.
+	last := time.Now()
 	if _, body := h.get("/html"); !strings.Contains(body, `<script src="/__waker/heartbeat.js" defer></script></body>`) {
 		t.Fatalf("no heartbeat in %q", body)
 	}
@@ -194,7 +198,6 @@ func TestLifecycle(t *testing.T) {
 		t.Fatal("status is not up")
 	}
 
-	last := time.Now()
 	h.eventually("the idle stop", 6*time.Second, func() bool { return !h.appUp() })
 	if took := time.Since(last); took < 2*time.Second {
 		t.Fatalf("stopped %s after the last request, before its 2s idle", took)

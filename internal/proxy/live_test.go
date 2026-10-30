@@ -23,7 +23,8 @@ import (
 
 // liveProcess "starts" the app by serving testapp on the upstream address.
 // With ready set, the app only comes up once ready is closed (a slow boot);
-// with fail set, the start command fails.
+// with fail set, the start command fails; with slow set, GET /slow answers
+// only once slow is closed (a request that stays in flight).
 type liveProcess struct {
 	addr   string
 	starts atomic.Int32
@@ -31,6 +32,21 @@ type liveProcess struct {
 	srv    *http.Server
 	ready  chan struct{}
 	fail   bool
+	slow   chan struct{}
+}
+
+func (p *liveProcess) handler() http.Handler {
+	app := testapp.Handler()
+	if p.slow == nil {
+		return app
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/", app)
+	mux.HandleFunc("GET /slow", func(w http.ResponseWriter, _ *http.Request) {
+		<-p.slow
+		_, _ = io.WriteString(w, "slow")
+	})
+	return mux
 }
 
 func (p *liveProcess) Start() (<-chan error, error) {
@@ -45,7 +61,7 @@ func (p *liveProcess) Start() (<-chan error, error) {
 	if err != nil {
 		return nil, err
 	}
-	srv := &http.Server{Handler: testapp.Handler()}
+	srv := &http.Server{Handler: p.handler()}
 	p.mu.Lock()
 	p.srv = srv
 	p.mu.Unlock()

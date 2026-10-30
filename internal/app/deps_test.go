@@ -139,6 +139,9 @@ func TestADependencyThatDoesNotComeUpFailsTheBoot(t *testing.T) {
 			if runs := c.procs["api"].Runs(); len(runs) != 0 {
 				t.Fatalf("api ran %v", runs)
 			}
+			// api settles once every dependency's Wake returned; a sibling's
+			// failure doesn't wait for db's boot, which runs on in the background.
+			c.apps["db"].Wait()
 			if got := c.procs["db"].Runs(); !slices.Equal(got, tt.depRuns) {
 				t.Fatalf("db ran %v, want %v", got, tt.depRuns)
 			}

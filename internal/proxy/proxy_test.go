@@ -210,7 +210,8 @@ func overCap(t *testing.T, bare bool) []byte {
 		t.Fatal(err)
 	}
 	defer hold.Close()
-	time.Sleep(50 * time.Millisecond) // let the server accept the holder
+	// No wait needed: Dial returns once the handshake is done, and the accept
+	// queue is FIFO, so Accept takes the holder (and the one slot) first.
 	c, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
 		t.Fatal(err)
@@ -222,7 +223,8 @@ func overCap(t *testing.T, bare bool) []byte {
 }
 
 func TestASlowRequestIsInFlightUntilItEnds(t *testing.T) {
-	l := newLive(t, nil)
+	release := make(chan struct{})
+	l := newLiveProc(t, nil, func(p *liveProcess) { p.slow = release })
 	l.app.Wake(t.Context())
 	l.waitUp(t)
 	done := make(chan int)
@@ -230,14 +232,12 @@ func TestASlowRequestIsInFlightUntilItEnds(t *testing.T) {
 		resp, _ := l.do(t, "GET", "/slow", nil)
 		done <- resp.StatusCode
 	}()
-	deadline := time.Now().Add(time.Second)
-	for l.app.Activity().Inflight() != 1 {
-		if time.Now().After(deadline) {
-			t.Fatal("slow request never counted in flight")
-		}
-		time.Sleep(5 * time.Millisecond)
+	l.waitInflight(t, 1) // /slow answers only once released
+	close(release)
+	if code := <-done; code != http.StatusOK {
+		t.Fatalf("slow = %d", code)
 	}
-	if code := <-done; code != http.StatusOK || l.app.Activity().Inflight() != 0 {
-		t.Fatalf("slow = %d, inflight after = %d", code, l.app.Activity().Inflight())
-	}
+	// The client has the body before the proxy's handler returns and ends
+	// the request, so wait for the count to drop rather than read it once.
+	l.waitInflight(t, 0)
 }
