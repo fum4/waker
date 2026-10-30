@@ -99,6 +99,7 @@ func Parse(data []byte) (*Config, error) {
 	cfg.inherited = got
 	cfg.dropInheritedSelfDeps()
 	cfg.applyDefaults()
+	cfg.dropInheritedOnSchedules()
 	return &cfg, nil
 }
 
