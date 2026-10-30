@@ -16,6 +16,9 @@ import (
 func renderStatus(w io.Writer, s app.Snapshot, now time.Time) {
 	fmt.Fprintf(w, "%s — %s → %s\n", s.Name, s.Listen, s.Upstream)
 	line(w, "mode", modeText(s, now))
+	if s.Schedule != nil {
+		line(w, "schedule", scheduleText(*s.Schedule, s.OverrideSince != nil, now))
+	}
 	st := string(s.State)
 	if s.Error != "" {
 		st += " — " + s.Error
@@ -82,10 +85,60 @@ func orNone(v *int64) string {
 
 func modeText(s app.Snapshot, now time.Time) string {
 	text := withIdle(s.Mode, s.Idle)
-	if s.OverrideSince != nil {
+	switch {
+	case s.OverrideSince != nil:
 		text += fmt.Sprintf(" (override, set %s ago; declared %s)", ago(now.Sub(*s.OverrideSince)), withIdle(s.DeclaredMode, s.DeclaredIdle))
+	case s.Schedule != nil && s.Schedule.Active:
+		text += fmt.Sprintf(" (schedule; declared %s)", withIdle(s.DeclaredMode, s.DeclaredIdle))
 	}
 	return text
+}
+
+// scheduleText: "on until 18:00 (window 0 9 * * 1-5 for 9h)" or
+// "next window Mon 09:00 (…)"; an override outranking the window says so.
+func scheduleText(sc app.ScheduleStatus, overridden bool, now time.Time) string {
+	var text string
+	switch {
+	case sc.Active && sc.Until != nil:
+		text = "on until " + clockText(*sc.Until, now)
+	case sc.Next != nil:
+		text = "next window " + clockText(*sc.Next, now)
+	default:
+		return "no window ahead"
+	}
+	if w := sc.Window; w != nil {
+		text += fmt.Sprintf(" (window %s for %s)", w.Cron, compactDuration(w.For.D()))
+	}
+	if overridden {
+		text += " · the override wins"
+	}
+	return text
+}
+
+// clockText shows t in now's zone: 18:00 today, Mon 09:00 this week, else
+// Jan 2 09:00.
+func clockText(t, now time.Time) string {
+	t = t.In(now.Location())
+	switch y, m, d := t.Date(); {
+	case y == now.Year() && m == now.Month() && d == now.Day():
+		return t.Format("15:04")
+	case t.Sub(now) < 6*24*time.Hour:
+		return t.Format("Mon 15:04")
+	default:
+		return t.Format("Jan 2 15:04")
+	}
+}
+
+// compactDuration drops time.Duration's zero tails: 9h, 1h30m, 45s.
+func compactDuration(d time.Duration) string {
+	s := d.String()
+	if strings.HasSuffix(s, "m0s") {
+		s = s[:len(s)-2]
+	}
+	if strings.HasSuffix(s, "h0m") {
+		s = s[:len(s)-2]
+	}
+	return s
 }
 
 func withIdle(m config.Mode, idle config.Duration) string {

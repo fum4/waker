@@ -51,6 +51,7 @@ Open http://127.0.0.1:8080. The first visit shows the starting page; the app ope
 | **Heartbeat** | A tiny script is injected into the app's HTML pages. It keeps an on-demand app awake while someone is actually reading. Opt out per app. |
 | **Memory** | An app boots only when `need + headroom(priority) + reserve` is available. Need is the declared size or the learned peak, whichever is higher. The peak is learned from the process tree's RSS, or from a systemd unit's MemoryPeak. When short, waker evicts lower-priority, idle, on-demand apps it started, one at a time. It never evicts pointlessly. |
 | **Dependencies** | `depends_on: [db]` wakes the database before the app that needs it, and keeps it up (no idle stop, no eviction) while that app is. |
+| **Schedules** | `schedule: [{cron: "0 9 * * 1-5", for: 9h}]` keeps an app on during working hours, whatever its mode, and hands it back to its mode after. |
 | **Pages** | starting, offline, busy, failed and down. They have a dark design, embedded font, your logo and accent colour, and make no external requests. They are `noindex` and never cached. Visitors only ever learn their app's state. Swap any of them for your own HTML file, or go `bare` (status and headers only). |
 | **Proxy** | Streams both ways (full duplex). Handles hop-by-hop headers correctly, keeps multi-value headers, and tunnels WebSocket upgrades. `/__waker/*` is reserved and never forwarded. |
 | **Control** | A unix socket readable only by waker's user (0600 in a 0700 dir). There is no network admin surface. |

@@ -70,9 +70,11 @@ func (a *App) DeadlineIn() (time.Duration, bool) {
 	return a.activity.DeadlineIn(idle)
 }
 
-// Tick stops the app if its idle deadline has passed. Health is not
-// consulted: an unhealthy but running app is stopped too.
+// Tick follows a schedule window that opened or closed, then stops the app
+// if its idle deadline has passed. Health is not consulted: an unhealthy
+// but running app is stopped too.
 func (a *App) Tick() {
+	a.followSchedule()
 	a.mu.Lock()
 	if a.modeLocked() != config.ModeOnDemand || a.booting {
 		a.mu.Unlock()
@@ -90,12 +92,15 @@ func (a *App) Tick() {
 	}
 }
 
-// SetMode sets a runtime override; mode nil resets to the declared mode.
-// An override equal to the declaration is dropped rather than stored.
-// Switching to off stops the app in the background; to on, wakes it.
+// SetMode sets a runtime override; mode nil resets to the declared mode
+// (and the schedule). An override equal to the declaration is dropped
+// rather than stored, unless the app has a schedule: then it pins the mode
+// through windows. Switching to off stops the app in the background; to
+// on, wakes it.
 func (a *App) SetMode(mode *config.Mode, idle time.Duration) error {
 	var o *state.Override
-	if mode != nil && !(*mode == a.cfg.Mode && (idle == 0 || idle == a.cfg.Idle.D())) {
+	same := mode != nil && *mode == a.cfg.Mode && (idle == 0 || idle == a.cfg.Idle.D())
+	if mode != nil && !(same && a.sched.Empty()) {
 		o = &state.Override{Mode: *mode, Since: a.d.Clock.Now().UTC().Truncate(time.Second), Idle: config.Duration(idle)}
 		if p := o.Problem(); p != "" {
 			return &InputError{p}
@@ -103,6 +108,8 @@ func (a *App) SetMode(mode *config.Mode, idle time.Duration) error {
 	}
 	a.mu.Lock()
 	a.override = o
+	// SetMode acts on this change itself; Tick must not act on it again.
+	a.lastMode = a.modeLocked()
 	a.mu.Unlock()
 	var saveErr error
 	if a.d.Persist != nil {

@@ -31,6 +31,8 @@ type Snapshot struct {
 	// KeptUpBy names the dependents keeping this app up (no idle stop, no
 	// eviction).
 	KeptUpBy []string `json:"kept_up_by,omitempty"`
+	// Schedule is set only for an app with a schedule.
+	Schedule *ScheduleStatus `json:"schedule,omitempty"`
 	// Memory is filled in by the daemon, which owns the budget.
 	Memory *memory.Breakdown `json:"memory,omitempty"`
 }
@@ -64,6 +66,7 @@ func (a *App) Snapshot(ctx context.Context) Snapshot {
 	a.mu.Unlock()
 	s.LastActivity = a.activity.LastActivity()
 	s.Inflight = a.activity.Inflight()
+	s.Schedule = a.scheduleStatus()
 	if s.Mode == config.ModeOnDemand && st == Up && len(keptUpBy) == 0 {
 		left := config.Duration(max(0, a.activity.IdleIn(s.Idle.D())))
 		s.IdleIn = &left

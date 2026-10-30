@@ -21,5 +21,6 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
   - peaks learned from the process tree or a systemd unit.
 - A top-level `defaults:` block every app inherits (app > defaults > built-in; maps merge per key, lists are replaced), and `waker check --effective` to print the resolved config.
 - `depends_on:` per app (or in `defaults`): waking an app wakes its dependencies first, in parallel, and fails its boot naming any that doesn't come up. A dependency stays up (no idle stop, no eviction) while a dependent is up; shutdown stops dependents first. `waker check` rejects unknown, self, duplicate and cyclic dependencies; `waker status` shows `needs:` / `needed by:`.
+- `schedule:` per app (or in `defaults`): cron windows (`{cron: "0 9 * * 1-5", for: 9h}`, local time or `CRON_TZ=`) during which the app is `on` whatever its declared mode. A window opening wakes the app; one closing returns it to its mode (on-demand gets a full idle, off is stopped). Overrides still win. `waker status` shows the current or next window.
 - Runtime mode overrides (`waker mode`, `waker reset`), persisted atomically.
 - `waker status` (text or `--json`), `waker check`, `waker version`. The control socket is a 0600 unix socket.

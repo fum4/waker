@@ -36,7 +36,7 @@ defaults:
 
 - **Scalars** (`idle`, `mode`, `priority`, …): the app's value wins.
 - **Maps** (`health`, `branding`, `env`, `pages`) merge per key: an app with `branding: {accent: "#f36"}` keeps the default `name` and `logo`. In `health`, `path` and `command` are one choice: an app that sets either inherits neither. In `pages`, `bare` and a map don't merge: the app's value wins whole.
-- **Lists** (`idle_ignore`, `depends_on`): the app's list replaces the default one; `[]` clears it.
+- **Lists** (`idle_ignore`, `depends_on`, `schedule`): the app's list replaces the default one; `[]` clears it. An app in mode `on` ignores an inherited `schedule`.
 
 ## `apps[]`
 
@@ -67,6 +67,7 @@ defaults:
 | `branding` | see below | The look of this app's visitor pages; usually set once in `defaults`. |
 | `pages` | built-in | Your own HTML file per visitor page, or `bare` for status and headers only; see below. |
 | `depends_on` | `[]` | Apps woken before this one and kept up while it is; see below. |
+| `schedule` | `[]` | Windows that keep the app on, whatever its mode: a list of `{cron, for}`; see below. |
 
 ## `resources`
 
@@ -106,7 +107,7 @@ resources:
 1. waker picks candidates: apps it started that are `on-demand`, up, with nothing in flight, not protected, not kept up by a [dependent](#depends_on-per-app-or-in-defaults), and of a lower priority (or equal, under `lower-or-equal`).
 2. If stopping all of them couldn't cover the shortfall, nothing is stopped and the visitor sees "busy".
 3. Otherwise it stops them one at a time in the configured order, re-measuring after each, and boots as soon as there's room.
-
+`on`-mode apps, and apps inside a [schedule](#schedule-per-app-or-in-defaults) window, are never evicted.
 `on`-mode apps are never evicted.
 
 ## `branding` (per app, or in `defaults`)
@@ -166,3 +167,29 @@ Waking `api` wakes `db` and `cache` first, and they stay up while `api` is; see 
 - a cycle, reported once (`apps[0] (api).depends_on: cycle api → db → api`).
 
 Set in `defaults`, the list applies to every app, and an app named in it drops itself from its inherited copy: `defaults: {depends_on: [db]}` makes every app but `db` need `db`. An app's own list naming itself is still an error.
+
+## `schedule` (per app, or in `defaults`)
+
+Windows during which the app is `on` (booted, no idle stop, never evicted), whatever its declared mode. Outside them it is its declared mode again. Weekdays, 09:00 to 18:00 local time:
+
+```yaml
+apps:
+  - name: crm
+    mode: on-demand
+    schedule:
+      - {cron: "0 9 * * 1-5", for: 9h}                           # weekdays 09:00–18:00
+      - {cron: "CRON_TZ=America/New_York 0 9 * * 1-5", for: 2h}  # plus 09:00–11:00 in New York
+```
+
+| Key | Meaning |
+|---|---|
+| `cron` | A standard 5-field cron spec (minute hour day-of-month month day-of-week), or `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`. Each fire time opens a window. It is read in waker's local time, unless it starts with `CRON_TZ=Area/City `. |
+| `for` | How long each window lasts: positive, at most `168h` (a week, the longest period a cron repeats on reliably; anything longer is mode `on`). |
+
+Windows that overlap or touch merge, across entries too. A window open when waker starts boots the app at once. Precedence and transitions are in [behaviour.md § Schedules](behaviour.md#schedules). `waker check` rejects, naming the key (`defaults.schedule[0].cron` when inherited):
+
+- a bad spec (`apps[0] (crm).schedule[0].cron: "0 9 * *": expected exactly 5 fields`), one that never fires (`0 0 30 2 *`), or `@every`, which counts from whenever it is asked and so has no fixed windows;
+- unknown keys in an entry, and a `for` out of range;
+- a schedule on an app whose own mode is `on`, where it can't do anything. An app in mode `on` simply ignores a `schedule` inherited from `defaults`.
+
+**Daylight saving.** A window opens at its local wall time on transition days too (`0 9 * * *` opens at 09:00). A fire time the spring-forward skips (`30 2 * * *` in New York) doesn't happen that day: there is no window until the next day's 02:30. One in the repeated hour of the fall-back fires twice, and the two windows merge. To avoid both, keep fire times out of 01:00–03:00, or use `CRON_TZ=UTC`.
