@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // Resources is the memory policy: how much must be free to boot an app, and
 // which running apps may be stopped to make room. Every key is optional; the
@@ -9,7 +12,8 @@ type Resources struct {
 	Headroom Headroom `yaml:"headroom"`
 	// Reserve is kept free on top of every app's headroom (default 0).
 	Reserve Size `yaml:"reserve"`
-	// AvailableSource is where available memory is read (meminfo only, for now).
+	// AvailableSource is where available memory is read: meminfo on Linux,
+	// vm_stat on macOS (the host's default; see Platform).
 	AvailableSource string   `yaml:"available_source"`
 	Eviction        Eviction `yaml:"eviction"`
 }
@@ -84,12 +88,11 @@ func (e Eviction) Summary() string {
 
 // Resource defaults.
 const (
-	DefaultCurve           = CurveLinear
-	DefaultHeadroomMax     = 5120 * MiB
-	DefaultHeadroomMin     = 512 * MiB
-	DefaultAvailableSource = "meminfo"
-	DefaultEvictionPolicy  = EvictLower
-	DefaultEvictionOrder   = OrderPriorityThenIdle
+	DefaultCurve          = CurveLinear
+	DefaultHeadroomMax    = 5120 * MiB
+	DefaultHeadroomMin    = 512 * MiB
+	DefaultEvictionPolicy = EvictLower
+	DefaultEvictionOrder  = OrderPriorityThenIdle
 )
 
 func (r *Resources) applyDefaults() {
@@ -104,7 +107,7 @@ func (r *Resources) applyDefaults() {
 		h.Min = DefaultHeadroomMin
 	}
 	if r.AvailableSource == "" {
-		r.AvailableSource = DefaultAvailableSource
+		r.AvailableSource = DefaultAvailableSource()
 	}
 	e := &r.Eviction
 	e.Enabled = e.EnabledRaw == nil || *e.EnabledRaw
@@ -145,8 +148,8 @@ func (r Resources) validate(names map[string]int, add addFunc) {
 	if h.Max < 0 || h.Min < 0 || h.Value < 0 || r.Reserve < 0 {
 		add("resources", "sizes must not be negative")
 	}
-	if r.AvailableSource != DefaultAvailableSource {
-		add("resources.available_source", "%q is not supported (only meminfo)", r.AvailableSource)
+	if !slices.Contains(host.AvailableSources, r.AvailableSource) {
+		add("resources.available_source", "%s", unsupported(r.AvailableSource, host.AvailableSources))
 	}
 	e := r.Eviction
 	switch e.Policy {

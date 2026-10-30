@@ -150,7 +150,7 @@ func (a *App) applyDefaults() {
 		a.Health.Timeout = Duration(DefaultHealthTimeout)
 	}
 	if a.MemorySource == "" {
-		a.MemorySource = DefaultMemorySource
+		a.MemorySource = DefaultMemorySource()
 	}
 }
 
