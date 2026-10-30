@@ -11,7 +11,6 @@ Install one static binary (about 11 MB for linux/amd64), point a few lines of YA
 ```sh
 curl -fsSL https://releases.nomadware.io/waker/install.sh | sh
 ```
-<!-- TODO: confirm the release URL before merge -->
 
 **2. Configure** `waker.yaml`
 
