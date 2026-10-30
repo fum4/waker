@@ -1,0 +1,25 @@
+[tools]
+node = "24"
+bun = "1.3"
+pnpm = "10"
+
+# Convention: the `setup` task is invoked once per repo on every fresh devbox
+# provision (by the `repos` Ansible role) and once on every `clone-repo` skill
+# run. Fill in this repo's first-time install command — e.g. `pnpm install`,
+# `cargo fetch`, `pip install -e .`, `bundle install`, etc.
+[tasks.setup]
+description = "First-time setup after clone (deps, codegen, …)"
+run = "# TODO: fill in — e.g. pnpm install"
+
+# The hook tasks (devbox docs/ci.md § Repo tasks): git push runs pre-push, wt
+# pre-merge runs pre-merge. Nothing to check at all → delete the task and say why
+# with a '# dev-contract: skip task-pre-push — <reason>' line (devbox-scaffold check).
+[tasks.pre-push]
+description = "Static checks: format · lint · typecheck, affected only ($PRE_PUSH_BASE..$PRE_PUSH_HEAD)"
+run = "# TODO: fill in — e.g. pnpm check"
+
+[tasks.pre-merge]
+description = "Unit · integration · build before merge (wt pre-merge)"
+run = "# TODO: fill in — e.g. pnpm test && pnpm build"
+
+
