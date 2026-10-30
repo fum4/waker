@@ -32,6 +32,12 @@ go.work.sum
 # .idea/
 # .vscode/
 
+# Terraform working dirs (state is in R2; .terraform.lock.hcl is committed)
+.terraform/
+.terraform-check/
+*.tfstate
+*.tfstate.*
+
 # Build output
 /bin/
 /dist/

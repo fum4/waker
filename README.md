@@ -267,7 +267,7 @@ It only resets the idle clock. It never wakes a stopped app (send a real request
 
 Pre-1.0. Config keys may still change, and the [CHANGELOG](CHANGELOG.md) records every change.
 
-**CI is the gate.** Every PR must pass the [`ci`](.github/workflows/ci.yml) checks (`lint`, `test`, `e2e`, `build`) before it merges. The `mise run pre-push` / `pre-merge` tasks run the same checks locally, for fast feedback. A `v*` tag publishes a release ([`release.yml`](.github/workflows/release.yml)).
+**CI is the gate.** Every PR must pass the [`ci`](.github/workflows/ci.yml) checks (`lint`, `test`, `e2e`, `build`) before it merges. The `mise run pre-push` / `pre-merge` tasks run the same checks locally, for fast feedback. The required checks are declared as code, a repository ruleset in [`infra/github/`](infra/github/). A `v*` tag publishes a release ([`release.yml`](.github/workflows/release.yml)).
 
 ## Licence
 
