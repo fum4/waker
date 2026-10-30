@@ -15,6 +15,9 @@ defaults:
     # logo: ./logo.svg     # an SVG or PNG; the built-in mark when omitted
     accent: "#5ad1ff"
     name: Example Co
+  # pages:                 # your own HTML per page ({{name}}, {{logo}}, {{accent}} filled in)
+  #   starting: ./pages/starting.html
+  # pages: bare            # or: status and headers only, no page bodies
 
 apps:
   # A tiny static site: Python's built-in server, woken on demand.
