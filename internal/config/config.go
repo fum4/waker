@@ -32,6 +32,17 @@ const (
 	MemoryNone MemorySource = "none"
 )
 
+// Waiting is what a browser gets while its app boots. Programs (anything
+// that isn't a browser navigation) are always held.
+type Waiting string
+
+const (
+	// WaitingPage answers browsers with the starting page at once.
+	WaitingPage Waiting = "page"
+	// WaitingHold holds browsers too, until the app is up or hold_timeout.
+	WaitingHold Waiting = "hold"
+)
+
 // Config is a whole waker configuration.
 type Config struct {
 	// StateDir holds mode overrides and learned memory peaks.
@@ -89,6 +100,9 @@ type App struct {
 	// Heartbeat is a pointer so an omitted key can default to true.
 	Heartbeat   *bool    `yaml:"heartbeat"`
 	BootTimeout Duration `yaml:"boot_timeout"`
+	// Waiting and HoldTimeout decide how requests wait out a boot.
+	Waiting     Waiting  `yaml:"waiting"`
+	HoldTimeout Duration `yaml:"hold_timeout"`
 	Branding    Branding `yaml:"branding,omitempty"`
 }
 
@@ -113,6 +127,8 @@ const (
 	DefaultIdle           = 30 * time.Minute
 	DefaultPriority       = 5.0
 	DefaultBootTimeout    = 600 * time.Second
+	DefaultWaiting        = WaitingPage
+	DefaultHoldTimeout    = 60 * time.Second
 	DefaultStopTimeout    = 10 * time.Second
 	DefaultHealthPath     = "/"
 	DefaultHealthInterval = time.Second

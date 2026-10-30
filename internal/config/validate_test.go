@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func validConfig() *Config {
@@ -47,6 +48,9 @@ func TestValidateNamesTheField(t *testing.T) {
 		{"headroom order", func(c *Config) { c.Resources.Headroom.Min = 8 * GiB }, "resources.headroom.min: 8GiB exceeds"},
 		{"nan priority", func(c *Config) { c.Apps[0].Priority = math.NaN() }, ".priority: NaN must be"},
 		{"inf priority", func(c *Config) { c.Apps[0].Priority = math.Inf(1) }, ".priority: +Inf must be"},
+		{"bad waiting", func(c *Config) { c.Apps[0].Waiting = "spin" }, `.waiting: "spin" must be page or hold`},
+		{"hold past boot", func(c *Config) { c.Apps[0].HoldTimeout = Duration(time.Hour) }, ".hold_timeout: 1h0m0s exceeds boot_timeout 10m0s"},
+		{"hold not positive", func(c *Config) { c.Apps[0].HoldTimeout = -1 }, ".hold_timeout: must be positive"},
 		{"negative app headroom", func(c *Config) { c.Apps[0].Headroom = -1 }, ".headroom: must not be negative"},
 		{"bad curve", func(c *Config) { c.Resources.Headroom.Curve = "cubic" }, "resources.headroom.curve"},
 		{"table missing", func(c *Config) {

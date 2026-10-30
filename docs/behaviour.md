@@ -14,8 +14,11 @@
 2. **Mode `off`:** the offline page, with 503.
 3. **Otherwise the request is forwarded** to the upstream, streaming both ways. If the connection is refused, the app is down:
    - an `idle_ignore` path gets the down state and doesn't wake it;
-   - anything else wakes it, and the visitor gets the starting page. A boot that is refused for memory gives busy, and one inside the failure cooldown gives failed.
-   - If the app turns out to be up already, a bodiless request is forwarded again.
+   - anything else wakes it. A boot that is refused for memory gives busy, and one inside the failure cooldown gives failed. While it boots:
+     - **a browser** gets the starting page at once (`waiting: page`, the default), or is held like a program (`waiting: hold`);
+     - **a program** (anything that isn't a browser, see below) is always **held**: the request waits until the app is healthy, then is forwarded, body included. If the boot fails or is refused it gets that state. After `hold_timeout` (default 60 s), a held browser gets the failed page and a program gets 503 `{"state":"starting"}`; the boot carries on.
+     - A held request counts as in flight: the app is neither idle-stopped nor evicted under it, and its connection counts against the 64-connection cap.
+   - If the app turns out to be up already, the request is forwarded again, as long as none of its body was sent yet.
 
 **Browsers get HTML pages, everything else gets JSON.** A request counts as a browser when it has `Sec-Fetch-Mode: navigate`, or is a GET accepting `text/html`. Every other request gets `{"state": "starting"}` and the like. Both use 503 + `Retry-After: 10`, `Cache-Control: no-store` and `X-Robots-Tag: noindex`. An upstream error after connecting gives the down page, with 502.
 

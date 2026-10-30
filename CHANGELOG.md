@@ -11,6 +11,7 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
   - an `idle_ignore` list;
   - one boot at a time per app, with a 120 s failure cooldown.
 - Visitor pages (starting, offline, busy, failed, down) with an embedded Geist font, plus per-app `branding.logo` / `accent` / `name`. The starting page polls `/__waker/status` and opens the app by itself.
+- Programs (non-browser requests) are held through a cold boot and forwarded once the app is healthy, bodies included; `waiting: hold` holds browsers too. `hold_timeout` bounds the wait.
 - Heartbeat injection into HTML pages, so a reader keeps an on-demand app awake.
 - Memory-aware boots: need (declared or learned peak) + headroom by priority + reserve. Also:
   - linear / table / fixed headroom curves;

@@ -78,6 +78,7 @@ type App struct {
 	mu           sync.Mutex
 	override     *state.Override
 	booting      bool
+	bootDone     chan struct{} // closed when the current (or last) boot ends
 	bootErr      string
 	bootFailedAt time.Time
 	busy         bool
