@@ -24,9 +24,10 @@ func (m Mode) Valid() bool {
 type MemorySource string
 
 const (
-	// MemoryProcTree samples the RSS of the process tree the waker started.
+	// MemoryProcTree samples the RSS of the process tree the waker started
+	// (Linux: it reads /proc).
 	MemoryProcTree MemorySource = "proctree"
-	// MemorySystemd reads MemoryPeak of a systemd unit.
+	// MemorySystemd reads MemoryPeak of a systemd unit (Linux).
 	MemorySystemd MemorySource = "systemd"
 	// MemoryNone disables learning; only the declared memory counts.
 	MemoryNone MemorySource = "none"
@@ -140,7 +141,6 @@ const (
 	DefaultHealthPath     = "/"
 	DefaultHealthInterval = time.Second
 	DefaultHealthTimeout  = 2 * time.Second
-	DefaultMemorySource   = MemoryProcTree
 	// DefaultNeed is the memory need of an app with nothing declared or learned.
 	DefaultNeed = 1024 * MiB
 	MinPriority = 1.0

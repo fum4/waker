@@ -11,7 +11,7 @@ waker's packages. Dependencies point down this list. Nothing here is importable 
 | `idle` | The activity `Tracker` (in-flight counter, deadline from request end) and the deadline `Loop`. | clock |
 | `state` | Atomic `modes.json` / `peaks.json`. | config |
 | `boot` | The start/stop/health process supervisor (own process group, SIGTERM → SIGKILL). | config |
-| `memory` | The headroom curve, the need/required `Budget`, `MemAvailable`, process-tree RSS, systemd `MemoryPeak`. | config |
+| `memory` | The headroom curve, the need/required `Budget`, available memory (`Meminfo` on Linux, `VMStat` on macOS, picked by `ForSource`), process-tree RSS, systemd `MemoryPeak`. | config |
 | `app` | One app's runtime: effective mode (override > schedule window > declared), the boot state machine, dependencies (wake first, keep up), `Wake`/`Tick`/`Stop`/`SetMode`, `Snapshot`. | idle, state, clock, memory, schedule |
 | `evict` | `Gate` (admission + eviction plan) implementing `app.Gate`. | app, memory |
 | `pages` | The visitor pages (built-in, or the owner's files with placeholders filled) and assets (embedded Geist, logo, heartbeat.js, wait.js); `WithTag`, the one script-tag injector. | config |
@@ -21,6 +21,7 @@ waker's packages. Dependencies point down this list. Nothing here is importable 
 | `testapp` | A fake upstream for tests; `testapp/fakeapp` is its binary, for the e2e test. | – |
 
 **Extending:**
-- A new memory source implements `memory.Available`.
+- A new available-memory source implements `memory.Available` and is a case in `memory.ForSource`. Name it in `config.PlatformFor` for the OSes it runs on; that sets defaults and `waker check`. Keep the parsing in an untagged file with tests that run on Linux, and put only the OS call behind a build tag (see `vmstat.go` / `vmstat_darwin.go`).
+- A platform's memory sources (which `memory_source` values work there, and the default) live only in `config.PlatformFor`.
 - A new peak source is a case in `daemon.recordPeak`.
 - A new visitor page is an entry in `pages.copyText` and `config.PageKeys` (a test keeps them equal), plus the state that shows it.

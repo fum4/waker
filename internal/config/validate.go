@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -163,6 +164,14 @@ func (h Health) validate(field string, add addFunc) {
 }
 
 func (a App) validateMemorySource(field string, add addFunc) {
+	if !slices.Contains(host.MemorySources, a.MemorySource) {
+		if slices.Contains(allMemorySources, a.MemorySource) {
+			add(field+".memory_source", "%s", unsupported(a.MemorySource, host.MemorySources))
+		} else {
+			add(field+".memory_source", "%q must be proctree, systemd or none", a.MemorySource)
+		}
+		return
+	}
 	switch a.MemorySource {
 	case MemoryProcTree, MemoryNone:
 		if a.SystemdUnit != "" {
@@ -172,7 +181,5 @@ func (a App) validateMemorySource(field string, add addFunc) {
 		if a.SystemdUnit == "" {
 			add(field+".systemd_unit", "is required for memory_source: systemd")
 		}
-	default:
-		add(field+".memory_source", "%q must be proctree, systemd or none", a.MemorySource)
 	}
 }

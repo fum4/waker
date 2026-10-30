@@ -61,7 +61,7 @@ defaults:
 | `heartbeat` | `true` | Inject the heartbeat script into the app's HTML pages. |
 | `priority` | `5` | A number from 1 (lowest) to 10 (highest); fractions are allowed (`7.5`). It decides headroom and who may evict whom. |
 | `memory` | – | The declared need. The learned peak raises it. |
-| `memory_source` | `proctree` | Where the peak is learned from: `proctree` (RSS of the started process tree, sampled every 5 s), `systemd` (needs `systemd_unit`; reads the unit's `MemoryPeak`), or `none`. |
+| `memory_source` | `proctree` on Linux, `none` on macOS | Where the peak is learned from: `proctree` (RSS of the started process tree from `/proc`, sampled every 5 s; Linux only), `systemd` (needs `systemd_unit`; reads the unit's `MemoryPeak`; Linux only), or `none`. On macOS only `none` is accepted, so declare `memory` there (else the need is 1024 MiB). |
 | `headroom` | – | An absolute headroom for this app, replacing the curve. |
 | `evictable` | `true` | `false` means this app is never evicted. |
 | `branding` | see below | The look of this app's visitor pages; usually set once in `defaults`. |
@@ -82,7 +82,7 @@ resources:
     # table: {1: 4GiB, 2: 3GiB, …, 10: 256MiB}   # table: all ten keys
     # value: 1GiB                                # fixed
   reserve: 0             # kept free on top of every app's headroom
-  available_source: meminfo
+  available_source: meminfo   # meminfo on Linux · vm_stat on macOS (the default for each)
   eviction:
     enabled: true
     policy: lower-priority    # lower-priority | lower-or-equal | never
@@ -91,6 +91,13 @@ resources:
 ```
 
 **The boot rule:** an app boots only if available memory ≥ `need + headroom + reserve`.
+
+**Available memory** comes from `available_source`, which defaults to the host's one source; `waker check` rejects the other:
+
+| Value | Platform | Reads |
+|---|---|---|
+| `meminfo` | Linux | `MemAvailable` from `/proc/meminfo`. |
+| `vm_stat` | macOS | `/usr/bin/vm_stat` (5 s timeout): pages free + file-backed + purgeable, times its page size. That is Activity Monitor's free memory plus "Cached Files". Inactive pages are left out because they include app memory macOS must compress to reclaim; MemAvailable leaves that out too. |
 
 - **`need`** is `max(memory, learned peak)`, or 1024 MiB when neither is known.
 - **The linear curve** is `max(min, max × (10 − p) / 9)`, rounded down to MiB. With the defaults:
