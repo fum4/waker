@@ -37,6 +37,7 @@ func TestExpiresOnceUntilTheNextActivity(t *testing.T) {
 	if !tr.Expire(10 * time.Second) {
 		t.Fatal("no first expiry")
 	}
+	tr.EndStop() // the stop it committed has run
 	c.Advance(10 * time.Second)
 	if tr.Expire(10 * time.Second) {
 		t.Fatal("expired twice")
@@ -84,6 +85,69 @@ func TestActivityResetsTheClock(t *testing.T) {
 	}
 	if got := tr.IdleIn(30 * time.Minute); got != time.Minute {
 		t.Fatalf("IdleIn = %v", got)
+	}
+}
+
+// Item 3: End restarts the clock in the same critical section as the
+// decrement, so a tick racing the end of a long request never sees "nothing
+// in flight" with the stale last activity of an hour ago.
+func TestATickRacingEndNeverSeesAStaleClock(t *testing.T) {
+	tr, c, _ := newTracker()
+	idle := 10 * time.Second
+	stop := make(chan struct{})
+	expired := make(chan struct{}, 1)
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if tr.Expire(idle) {
+				expired <- struct{}{}
+				tr.EndStop() // let the requests continue so the test fails, not hangs
+				return
+			}
+		}
+	}()
+	for range 2000 {
+		tr.Begin()
+		c.Advance(time.Hour) // a long request; the clock never moves after End
+		tr.End()
+	}
+	close(stop)
+	select {
+	case <-expired:
+		t.Fatal("expired right as a request ended")
+	default:
+	}
+}
+
+func TestBeginWaitsForACommittedStop(t *testing.T) {
+	tr, c, _ := newTracker()
+	c.Advance(time.Minute)
+	if !tr.Expire(time.Second) || !tr.Stopping() {
+		t.Fatal("expiry did not commit a stop")
+	}
+	if tr.TryStop() {
+		t.Fatal("a second stop committed over the first")
+	}
+	tr.BeginStop() // overlapping unconditional stop (mode off)
+	begun := make(chan struct{})
+	go func() { tr.Begin(); close(begun) }()
+	tr.EndStop()
+	select {
+	case <-begun:
+		t.Fatal("Begin ran while the second stop was still in progress")
+	case <-time.After(30 * time.Millisecond):
+	}
+	tr.EndStop()
+	<-begun
+	if tr.Inflight() != 1 || tr.Stopping() {
+		t.Fatal("request not counted after the stop")
+	}
+	if tr.TryStop() {
+		t.Fatal("TryStop committed with a request in flight")
 	}
 }
 

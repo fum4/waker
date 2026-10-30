@@ -20,6 +20,9 @@ import (
 	"github.com/fum4/waker/internal/config"
 )
 
+// groupPoll is how often a stopping process group is checked for exit.
+const groupPoll = 20 * time.Millisecond
+
 // Process supervises one app's commands. It is safe for concurrent use.
 type Process struct {
 	app    config.App
@@ -113,9 +116,14 @@ func (p *Process) terminate() {
 	if err := syscall.Kill(-pgid, syscall.SIGTERM); errors.Is(err, syscall.ESRCH) {
 		return // the whole group is already gone
 	}
-	select {
-	case <-exited:
-	case <-time.After(p.app.StopTimeout.D()):
+	// Grace for the whole group, not just its leader: children orphaned by a
+	// leader that already exited get the same stop_timeout before SIGKILL.
+	deadline := time.Now().Add(p.app.StopTimeout.D())
+	for time.Now().Before(deadline) && syscall.Kill(-pgid, 0) == nil {
+		select {
+		case <-exited:
+		case <-time.After(groupPoll):
+		}
 	}
 	_ = syscall.Kill(-pgid, syscall.SIGKILL)
 	<-exited

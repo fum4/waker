@@ -108,6 +108,41 @@ func TestBusyWhenTheEstimateWasWrong(t *testing.T) {
 	}
 }
 
+// Item 4: concurrent boots don't both spend the same free memory; the
+// reservation ends with the boot.
+func TestConcurrentAdmissionsReserveMemory(t *testing.T) {
+	w := newWorld(config.Eviction{})
+	a := w.add("a", 5, 1000, 0) // requires 1000 + 2844 = 3844
+	b := w.add("b", 5, 1000, 0)
+	w.squeeze(5000) // room for one boot, not two
+	if _, ok := w.gate.Admit(a); !ok {
+		t.Fatal("first boot refused")
+	}
+	if _, ok := w.gate.Admit(b); ok {
+		t.Fatal("second boot admitted against memory reserved by the first")
+	}
+	w.gate.Release(a)
+	if _, ok := w.gate.Admit(b); !ok {
+		t.Fatal("refused after the first boot ended")
+	}
+	w.gate.Release(b)
+}
+
+func TestABootReleasesItsReservationWhenItEnds(t *testing.T) {
+	w := newWorld(config.Eviction{})
+	a := w.add("a", 5, 1000, 0)
+	b := w.add("b", 5, 1000, 0)
+	w.squeeze(5000)
+	if st := a.Wake(ctx); st != app.Starting {
+		t.Fatalf("wake a = %s", st)
+	}
+	a.Wait()
+	if st := b.Wake(ctx); st != app.Starting {
+		t.Fatalf("wake b after a's boot ended = %s", st)
+	}
+	b.Wait()
+}
+
 func TestPolicies(t *testing.T) {
 	tests := []struct {
 		name      string

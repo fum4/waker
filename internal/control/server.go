@@ -79,6 +79,9 @@ func Listen(path string) (net.Listener, error) {
 		c.Close()
 		return nil, fmt.Errorf("%s: another waker is already listening", path)
 	}
+	if st, err := os.Lstat(path); err == nil && st.Mode()&os.ModeSocket == 0 {
+		return nil, fmt.Errorf("%s exists and is not a socket; refusing to replace it", path)
+	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}

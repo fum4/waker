@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"slices"
+	"sync"
 
 	"github.com/fum4/waker/internal/app"
 	"github.com/fum4/waker/internal/config"
@@ -21,18 +22,27 @@ type Gate struct {
 	Avail  memory.Available
 	Policy config.Eviction
 	Log    *slog.Logger
+
+	mu       sync.Mutex
+	reserved map[*app.App]int64 // MiB held by admitted boots not yet ended
 }
 
 // Admit lets a boot start when enough memory is available, or when a plan
 // of evictions could free the shortfall; otherwise the app is busy.
 func (g *Gate) Admit(a *app.App) (func() bool, bool) {
+	// Serialised, and every admitted-but-unfinished boot's requirement counts
+	// as used: two concurrent wakes must not both spend the same free memory.
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	bd := g.Budget.Breakdown(a.Config())
-	avail, err := g.Avail.AvailableMiB()
+	avail, err := g.freeLocked(a)
 	if err != nil {
 		g.Log.Warn("available memory unreadable; booting anyway", "app", a.Name(), "err", err)
+		g.reserveLocked(a, bd.RequiredMiB)
 		return nil, true
 	}
 	if avail >= bd.RequiredMiB {
+		g.reserveLocked(a, bd.RequiredMiB)
 		return nil, true
 	}
 	plan := g.Plan(a, bd.RequiredMiB-avail)
@@ -41,7 +51,39 @@ func (g *Gate) Admit(a *app.App) (func() bool, bool) {
 			"available_mib", avail, "required_mib", bd.RequiredMiB, "need_mib", bd.NeedMiB, "headroom_mib", bd.HeadroomMiB)
 		return nil, false
 	}
+	g.reserveLocked(a, bd.RequiredMiB)
 	return func() bool { return g.makeRoom(a, plan, bd.RequiredMiB) }, true
+}
+
+// Release drops a's reservation once its boot has ended (up, failed or busy).
+func (g *Gate) Release(a *app.App) {
+	g.mu.Lock()
+	delete(g.reserved, a)
+	g.mu.Unlock()
+}
+
+func (g *Gate) reserveLocked(a *app.App, mib int64) {
+	if g.reserved == nil {
+		g.reserved = map[*app.App]int64{}
+	}
+	g.reserved[a] = mib
+}
+
+// freeLocked is available memory minus what other admitted boots reserved.
+func (g *Gate) freeLocked(a *app.App) (int64, error) {
+	avail, err := g.Avail.AvailableMiB()
+	for other, mib := range g.reserved {
+		if other != a {
+			avail -= mib
+		}
+	}
+	return avail, err
+}
+
+func (g *Gate) free(a *app.App) (int64, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.freeLocked(a)
 }
 
 // Plan returns the apps to stop, in order, so booting can start — or nil
@@ -112,16 +154,18 @@ func cmpFloat(a, b float64) int {
 // and skips a victim that stopped qualifying meanwhile.
 func (g *Gate) makeRoom(booting *app.App, plan []*app.App, required int64) bool {
 	for _, v := range plan {
-		if avail, err := g.Avail.AvailableMiB(); err == nil && avail >= required {
+		if avail, err := g.free(booting); err == nil && avail >= required {
 			return true
 		}
 		if !g.Evictable(v, booting) {
 			continue
 		}
-		g.Log.Warn("evicting", "app", v.Name(), "priority", v.Priority(), "for", booting.Name(), "for_priority", booting.Priority(), "required_mib", required)
-		v.Evict(booting)
+		if !v.Evict(booting) {
+			continue // a request arrived since the plan: it stays up
+		}
+		g.Log.Warn("evicted", "app", v.Name(), "priority", v.Priority(), "for", booting.Name(), "for_priority", booting.Priority(), "required_mib", required)
 	}
-	avail, err := g.Avail.AvailableMiB()
+	avail, err := g.free(booting)
 	if err != nil || avail < required {
 		g.Log.Warn("still short after evicting: busy", "app", booting.Name(), "available_mib", avail, "required_mib", required)
 		return false

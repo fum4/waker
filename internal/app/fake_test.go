@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/fum4/waker/internal/clock"
 	"github.com/fum4/waker/internal/config"
@@ -24,6 +25,11 @@ type fakeProcess struct {
 	gate      chan struct{}
 	runs      []string
 	startedCh chan struct{}
+	stopGate  chan struct{} // Stop blocks on it when set
+	inStop    bool
+	overlap   bool // a Start ran while a Stop was in progress
+	probes    int
+	probeWait time.Duration
 }
 
 func newFake() *fakeProcess { return &fakeProcess{comesUp: true} }
@@ -31,6 +37,9 @@ func newFake() *fakeProcess { return &fakeProcess{comesUp: true} }
 func (f *fakeProcess) Start() (<-chan error, error) {
 	f.mu.Lock()
 	f.runs = append(f.runs, "start")
+	if f.inStop {
+		f.overlap = true
+	}
 	gate, started := f.gate, f.startedCh
 	f.mu.Unlock()
 	if started != nil {
@@ -52,6 +61,11 @@ func (f *fakeProcess) Start() (<-chan error, error) {
 
 func (f *fakeProcess) Healthy(context.Context) bool {
 	f.mu.Lock()
+	f.probes++
+	wait := f.probeWait
+	f.mu.Unlock()
+	time.Sleep(wait)
+	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.panicked && len(f.runs) > 0 {
 		panic("probe exploded")
@@ -61,7 +75,15 @@ func (f *fakeProcess) Healthy(context.Context) bool {
 
 func (f *fakeProcess) Stop(context.Context) error {
 	f.mu.Lock()
+	f.inStop = true
+	gate := f.stopGate
+	f.mu.Unlock()
+	if gate != nil {
+		<-gate
+	}
+	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.inStop = false
 	f.runs = append(f.runs, "stop")
 	f.up = false
 	return nil
