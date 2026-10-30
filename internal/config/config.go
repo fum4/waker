@@ -104,6 +104,8 @@ type App struct {
 	Waiting     Waiting  `yaml:"waiting"`
 	HoldTimeout Duration `yaml:"hold_timeout"`
 	Branding    Branding `yaml:"branding,omitempty"`
+	// Pages swaps the built-in visitor pages for the owner's files, or bare.
+	Pages Pages `yaml:"pages,omitempty"`
 }
 
 // HeartbeatEnabled reports whether heartbeat injection is on for the app.

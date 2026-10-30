@@ -17,7 +17,7 @@ var PerAppOnly = []string{"name", "listen", "upstream", "start", "stop"}
 
 // mergedMaps are the keys whose maps merge per key (the app's keys win);
 // every other key, lists included, is replaced whole by the app's.
-var mergedMaps = map[string]bool{"health": true, "branding": true, "env": true}
+var mergedMaps = map[string]bool{"health": true, "branding": true, "env": true, "pages": true}
 
 // healthProbes are alternatives: an app that picks one inherits neither,
 // or a default path plus an app command would be "both".
