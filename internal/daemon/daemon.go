@@ -147,7 +147,8 @@ func (d *Daemon) listen() []*http.Server {
 	return servers
 }
 
-// step stops whatever is due and returns the time to the next deadline.
+// step stops whatever is due, follows schedule windows, and returns the
+// time to the next deadline or window boundary.
 func (d *Daemon) step() time.Duration {
 	next := idle.MaxSleep
 	for _, a := range d.ticked() {
@@ -159,7 +160,7 @@ func (d *Daemon) step() time.Duration {
 			}()
 			a.Tick()
 		}()
-		if left, ok := a.DeadlineIn(); ok {
+		if left, ok := a.NextEventIn(); ok {
 			next = min(next, left)
 		}
 	}
