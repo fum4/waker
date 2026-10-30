@@ -53,7 +53,7 @@ func TestCustomPages(t *testing.T) {
 func TestCustomPagesLeaveTheOthersBuiltIn(t *testing.T) {
 	p := mustNew(t, customApp(t, "shop", "", map[string]string{Offline: "<p>closed</p>"}))
 	html, _ := p.Render(Starting)
-	if !bytes.Contains(html, []byte("Powering up")) || bytes.Count(html, []byte(WaitTag)) != 1 {
+	if !bytes.Contains(html, []byte("Powering up the servers")) || bytes.Count(html, []byte(WaitTag)) != 1 {
 		t.Fatalf("built-in starting page changed: %s", html)
 	}
 	if html, _ = p.Render(Offline); string(html) != "<p>closed</p>" {
@@ -65,6 +65,24 @@ func TestCustomPageErrors(t *testing.T) {
 	a := config.App{Name: "shop", Pages: config.Pages{Files: map[string]string{Starting: "/nonexistent/starting.html"}}}
 	if _, err := New(a); err == nil || !bytes.Contains([]byte(err.Error()), []byte("pages.starting: open /nonexistent")) {
 		t.Fatalf("New err = %v", err)
+	}
+}
+
+func TestCustomPageContact(t *testing.T) {
+	const file = `<a href="mailto:{{contact}}">{{contact}}</a>`
+	tests := []struct{ name, contact, want string }{
+		{"set", "hello@example.com", `<a href="mailto:hello@example.com">hello@example.com</a>`},
+		{"escaped", "https://example.com/?a=1&b=2", `<a href="mailto:https://example.com/?a=1&amp;b=2">https://example.com/?a=1&amp;b=2</a>`},
+		{"unset: empty", "", `<a href="mailto:"></a>`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := customApp(t, "shop", "", map[string]string{Down: file})
+			a.Branding.Contact = tt.contact
+			if got, _ := mustNew(t, a).Render(Down); string(got) != tt.want {
+				t.Fatalf("Render = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

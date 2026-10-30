@@ -104,7 +104,7 @@ func TestHeldThroughAColdBoot(t *testing.T) {
 func TestBrowserGetsTheStartingPageByDefault(t *testing.T) {
 	l, _ := slowLive(t, nil)
 	r := <-l.async(t, "GET", "/", "", "Accept", htmlAccept)
-	if r.status != http.StatusServiceUnavailable || !strings.Contains(r.body, "Powering up") {
+	if r.status != http.StatusServiceUnavailable || !strings.Contains(r.body, "Powering up the servers") {
 		t.Fatalf("= %+v", r)
 	}
 }
@@ -121,7 +121,7 @@ func TestHoldTimeout(t *testing.T) {
 		want   string
 	}{
 		{"program gets 503 JSON", short(config.WaitingPage), nil, "application/json", `{"state":"starting"}`},
-		{"browser gets the failed page", short(config.WaitingHold), []string{"Accept", htmlAccept}, "text/html; charset=utf-8", "<title>Couldn&#39;t start the app"},
+		{"browser gets the failed page", short(config.WaitingHold), []string{"Accept", htmlAccept}, "text/html; charset=utf-8", "<title>That didn&#39;t go as planned"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

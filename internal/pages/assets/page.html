@@ -1,10 +1,10 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8">
+{{define "line"}}{{if .Contact}}{{.Before}}<a href="{{.Contact.Href}}">{{.Contact.Label}}</a>{{.After}}{{else}}{{.Text}}{{end}}{{end}}<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="robots" content="noindex"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark"><title>{{.Title}}</title><style>:root{--sig:{{.Accent}}}{{.Style}}</style></head>
 <body data-page="{{.Page}}"><main>
 <div class="logo"><img src="/__waker/logo" alt="{{.Brand}}"></div>
-<h1 id="title">{{.Title}}</h1><p id="text">{{.Text}}</p>
+<h1 id="title">{{.Title}}</h1><p id="text">{{template "line" .Line}}</p>
 <div class="decode" aria-hidden="true"><span data-g="1"></span><span data-g="0"></span><span data-g="1"></span><span data-g="1"></span><span data-g="0"></span><span data-g="0"></span><i class="cursor"></i></div>
 <p class="name">{{.Name}}</p>
-</main>{{if .Ends}}<script type="application/json" id="waker-ends">{{.Ends}}</script>
-{{.Wait}}{{end}}</body></html>
+</main>{{if .Ends}}{{range .Ends}}<template class="waker-end" data-page="{{.Page}}" data-title="{{.Title}}">{{template "line" .Line}}</template>
+{{end}}{{.Wait}}{{end}}</body></html>

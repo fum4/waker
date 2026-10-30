@@ -78,6 +78,15 @@ h1 {
   line-height: 1.45;
 }
 
+/* The branding.contact link: the text colour, underlined in the accent. */
+#text a {
+  color: var(--fg);
+  text-decoration: underline;
+  text-decoration-color: var(--sig);
+  text-underline-offset: 0.2em;
+  overflow-wrap: anywhere;
+}
+
 /* The decode line: six 0/1 glyphs and a block cursor. On the starting page each glyph flips at
    its own offset and the cursor blinks; elsewhere the line is still and dim (warm on failed).
    The starting page animates even under prefers-reduced-motion: it is the progress signal. */
