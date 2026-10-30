@@ -3,6 +3,7 @@ package proxy
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -21,15 +22,25 @@ import (
 )
 
 // liveProcess "starts" the app by serving testapp on the upstream address.
+// With ready set, the app only comes up once ready is closed (a slow boot);
+// with fail set, the start command fails.
 type liveProcess struct {
 	addr   string
 	starts atomic.Int32
 	mu     sync.Mutex
 	srv    *http.Server
+	ready  chan struct{}
+	fail   bool
 }
 
 func (p *liveProcess) Start() (<-chan error, error) {
 	p.starts.Add(1)
+	if p.fail {
+		return nil, errors.New("start failed")
+	}
+	if p.ready != nil {
+		<-p.ready
+	}
 	ln, err := net.Listen("tcp", p.addr)
 	if err != nil {
 		return nil, err
@@ -80,6 +91,11 @@ func freeAddr(t *testing.T) string {
 
 func newLive(t *testing.T, mutate func(*config.App)) *live {
 	t.Helper()
+	return newLiveProc(t, mutate, func(*liveProcess) {})
+}
+
+func newLiveProc(t *testing.T, mutate func(*config.App), setup func(*liveProcess)) *live {
+	t.Helper()
 	upstream := freeAddr(t)
 	cfg, err := config.Parse([]byte("apps: [{name: shop, listen: '127.0.0.1:1', upstream: 'http://" + upstream + "', start: [x], idle_ignore: [/poll]}]"))
 	if err != nil {
@@ -90,6 +106,7 @@ func newLive(t *testing.T, mutate func(*config.App)) *live {
 		mutate(&ac)
 	}
 	proc := &liveProcess{addr: upstream}
+	setup(proc)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	a := app.New(ac, app.Deps{Clock: clock.Real{}, Process: proc, Log: log}, nil)
 	pg, err := pages.New(ac.Branding)
@@ -106,7 +123,9 @@ func newLive(t *testing.T, mutate func(*config.App)) *live {
 	}
 	srv := &http.Server{Handler: h}
 	go func() { _ = srv.Serve(LimitListener(ln, MaxConnections)) }()
-	t.Cleanup(func() { srv.Close(); _ = proc.Stop(context.Background()); a.Wait() })
+	// Let a running boot finish first: stopping under it would leave it polling
+	// a dead upstream until boot_timeout.
+	t.Cleanup(func() { srv.Close(); a.Wait(); _ = proc.Stop(context.Background()) })
 	return &live{url: "http://" + ln.Addr().String(), addr: ln.Addr().String(), proc: proc, app: a}
 }
 

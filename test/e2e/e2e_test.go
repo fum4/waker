@@ -122,6 +122,18 @@ func (h *harness) get(path string) (int, string) {
 	return resp.StatusCode, string(b)
 }
 
+// post sends body as a program would (no Accept: text/html).
+func (h *harness) post(path, body string) (int, string) {
+	h.t.Helper()
+	resp, err := (&http.Client{Timeout: 20 * time.Second}).Post("http://"+h.listen+path, "text/plain", strings.NewReader(body))
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(b)
+}
+
 func (h *harness) appUp() bool {
 	c, err := net.DialTimeout("tcp", h.appAddr, time.Second)
 	if err == nil {
@@ -200,7 +212,13 @@ func TestLifecycle(t *testing.T) {
 	if out, err := h.cli("reset", "shop"); err != nil || !strings.Contains(out, "mode:      on-demand, idle 2s\n") {
 		t.Fatalf("reset: %v %s", err, out)
 	}
-	h.wakeToUp()
+	// A program (no text/html) is held through the cold boot, body and all.
+	if code, body := h.post("/echo", "held-body"); code != 200 || body != "held-body" {
+		t.Fatalf("held POST = %d %q", code, body)
+	}
+	if h.state() != "up" {
+		t.Fatal("status is not up after the held request")
+	}
 
 	if err := waker.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatal(err)

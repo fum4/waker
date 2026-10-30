@@ -121,6 +121,14 @@ func (a App) validate(field string, add addFunc) {
 	if a.BootTimeout <= 0 {
 		add(field+".boot_timeout", "must be positive")
 	}
+	if a.Waiting != WaitingPage && a.Waiting != WaitingHold {
+		add(field+".waiting", "%q must be page or hold", a.Waiting)
+	}
+	if a.HoldTimeout <= 0 {
+		add(field+".hold_timeout", "must be positive")
+	} else if a.HoldTimeout > a.BootTimeout {
+		add(field+".hold_timeout", "%s exceeds boot_timeout %s", a.HoldTimeout, a.BootTimeout)
+	}
 	if a.StopTimeout <= 0 {
 		add(field+".stop_timeout", "must be positive")
 	}
