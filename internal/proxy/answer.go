@@ -33,6 +33,8 @@ func (h *Handler) reserved(w http.ResponseWriter, r *http.Request) {
 		write(w, r, http.StatusOK, "font/woff2", pages.Font(), cacheAsset)
 	case name == "heartbeat.js" && get:
 		write(w, r, http.StatusOK, "text/javascript; charset=utf-8", pages.Heartbeat(), cacheAsset)
+	case name == "wait.js" && get:
+		write(w, r, http.StatusOK, "text/javascript; charset=utf-8", pages.Wait(), cacheAsset)
 	case name == "logo" && get:
 		logo, ct := h.pages.Logo()
 		write(w, r, http.StatusOK, ct, logo, cacheAsset)
@@ -41,10 +43,15 @@ func (h *Handler) reserved(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// page answers with the named page for a browser navigation, else JSON.
+// page answers with the named page for a browser navigation, else JSON;
+// with pages: bare, with the status and headers alone.
 func (h *Handler) page(w http.ResponseWriter, r *http.Request, status int, page string) {
+	if h.pages.Bare() {
+		write(w, r, status, "", nil, cacheNone)
+		return
+	}
 	if wantsHTML(r) {
-		body, err := h.pages.Render(page, h.app.Name())
+		body, err := h.pages.Render(page)
 		if err == nil {
 			write(w, r, status, "text/html; charset=utf-8", body, cacheNone)
 			return
@@ -65,9 +72,13 @@ func writeJSON(w http.ResponseWriter, r *http.Request, status int, v any) {
 	write(w, r, status, "application/json", body, cacheNone)
 }
 
+// write answers with body; an empty ctype sends no Content-Type (a bare
+// answer has no body to type).
 func write(w http.ResponseWriter, r *http.Request, status int, ctype string, body []byte, cache string) {
 	hd := w.Header()
-	hd.Set("Content-Type", ctype)
+	if ctype != "" {
+		hd.Set("Content-Type", ctype)
+	}
 	hd.Set("Content-Length", strconv.Itoa(len(body)))
 	hd.Set("Cache-Control", cache)
 	hd.Set("X-Robots-Tag", "noindex")

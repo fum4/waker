@@ -45,7 +45,10 @@ func build(t *testing.T, dir, pkg string) string {
 	return out
 }
 
-func setup(t *testing.T) *harness {
+func setup(t *testing.T) *harness { return setupWith(t, func(string) string { return "" }) }
+
+// setupWith adds extra(dir)'s lines (indented four spaces) to the app.
+func setupWith(t *testing.T, extra func(dir string) string) *harness {
 	t.Helper()
 	dir := t.TempDir()
 	h := &harness{t: t, listen: freeAddr(t), appAddr: freeAddr(t), logo: []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`)}
@@ -57,7 +60,7 @@ func setup(t *testing.T) *harness {
 	write(t, h.config, "state_dir: "+dir+"/state\ncontrol_socket: "+dir+"/run/control.sock\n"+
 		"defaults: {branding: {logo: "+logo+", accent: '#ff3366'}}\napps:\n  - name: shop\n    listen: '"+h.listen+"'\n"+
 		"    upstream: 'http://"+h.appAddr+"'\n    start: ["+fakeapp+", -listen, '"+h.appAddr+"']\n"+
-		"    health: {path: /healthz, interval: 100ms}\n    idle: 2s\n")
+		"    health: {path: /healthz, interval: 100ms}\n    idle: 2s\n"+extra(dir))
 	return h
 }
 
@@ -228,5 +231,33 @@ func TestLifecycle(t *testing.T) {
 	}
 	if h.appUp() {
 		t.Fatal("the app outlived the waker")
+	}
+}
+
+func TestCustomStartingPage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds binaries")
+	}
+	h := setupWith(t, func(dir string) string {
+		write(t, filepath.Join(dir, "starting.html"), `<html><body style="--c:{{accent}}"><img src="{{logo}}"><h1>{{name}} is waking</h1></body></html>`)
+		return "    pages: {starting: starting.html}\n" // relative: resolved against the config's dir
+	})
+	waker := h.serve()
+	code, body := h.get("/")
+	want := `<html><body style="--c:#ff3366"><img src="/__waker/logo"><h1>shop is waking</h1>` +
+		`<script src="/__waker/wait.js" defer></script></body></html>`
+	if code != 503 || body != want {
+		t.Fatalf("first visit = %d %q", code, body)
+	}
+	if code, body := h.get("/__waker/wait.js"); code != 200 || !strings.Contains(body, "/__waker/status") {
+		t.Fatalf("wait.js = %d %q", code, body)
+	}
+	h.eventually("the app serves", 10*time.Second, func() bool { code, body := h.get("/page"); return code == 200 && body == "app:/page" })
+
+	if err := waker.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	if err := waker.Wait(); err != nil {
+		t.Fatalf("waker exit: %v", err)
 	}
 }
