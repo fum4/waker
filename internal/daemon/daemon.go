@@ -136,7 +136,7 @@ func (d *Daemon) listen() []*http.Server {
 			continue
 		}
 		srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
-		go func() { _ = srv.Serve(proxy.LimitListener(ln, proxy.MaxConnections)) }()
+		go func() { _ = srv.Serve(proxy.LimitListener(ln, proxy.MaxConnections, ac.Pages.Bare)) }()
 		servers = append(servers, srv)
 		d.listening = append(d.listening, a)
 	}
