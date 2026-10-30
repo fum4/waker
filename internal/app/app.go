@@ -12,6 +12,7 @@ import (
 	"github.com/fum4/waker/internal/clock"
 	"github.com/fum4/waker/internal/config"
 	"github.com/fum4/waker/internal/idle"
+	"github.com/fum4/waker/internal/schedule"
 	"github.com/fum4/waker/internal/state"
 )
 
@@ -77,9 +78,12 @@ type App struct {
 	// deps and dependents are set by SetDependencies before serving and
 	// never change after, so they are read without a lock.
 	deps, dependents []*App
+	sched            *schedule.Schedule // nil = none; immutable
 
-	mu           sync.Mutex
-	override     *state.Override
+	mu       sync.Mutex
+	override *state.Override
+	// lastMode is the effective mode Tick (or SetMode) last acted on.
+	lastMode     config.Mode
 	booting      bool
 	bootDone     chan struct{} // closed when the current (or last) boot ends
 	bootErr      string
@@ -107,6 +111,8 @@ func New(cfg config.App, d Deps, override *state.Override) *App {
 	a := &App{cfg: cfg, d: d, override: override}
 	a.activity = idle.NewTracker(d.Clock, d.Notify)
 	a.d.Log = d.Log.With("app", cfg.Name)
+	a.sched = parseSchedule(cfg, a.d.Log)
+	a.lastMode = a.Mode()
 	return a
 }
 
@@ -119,7 +125,8 @@ func (a *App) Name() string { return a.cfg.Name }
 // Priority returns the app's priority (1 lowest … 10 highest).
 func (a *App) Priority() float64 { return a.cfg.Priority }
 
-// Mode returns the effective mode: the override's, else the declared one.
+// Mode returns the effective mode: the override's, else on inside a
+// schedule window, else the declared one.
 func (a *App) Mode() config.Mode {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -127,8 +134,11 @@ func (a *App) Mode() config.Mode {
 }
 
 func (a *App) modeLocked() config.Mode {
-	if a.override != nil {
+	switch {
+	case a.override != nil:
 		return a.override.Mode
+	case a.inWindow():
+		return config.ModeOn
 	}
 	return a.cfg.Mode
 }
