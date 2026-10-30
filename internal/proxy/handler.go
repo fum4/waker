@@ -57,6 +57,9 @@ func New(a *app.App, p *pages.Pages, log *slog.Logger) (*Handler, error) {
 			pr.SetURL(target)
 			pr.Out.Host = pr.In.Host // the app sees the visitor's Host
 			pr.SetXForwarded()
+			if v, _ := pr.In.Context().Value(pageLoadKey{}).(bool); v {
+				pr.Out.Header.Set("Accept-Encoding", "identity") // so the page can be injected
+			}
 		},
 		Transport: &http.Transport{
 			Proxy:               nil, // never through an env proxy: the upstream is local
@@ -65,8 +68,9 @@ func New(a *app.App, p *pages.Pages, log *slog.Logger) (*Handler, error) {
 			MaxIdleConnsPerHost: 16,
 			IdleConnTimeout:     90 * time.Second,
 		},
-		FlushInterval: -1, // stream: flush every write
-		ErrorHandler:  h.upstreamError,
+		FlushInterval:  -1, // stream: flush every write
+		ModifyResponse: injectHeartbeat,
+		ErrorHandler:   h.upstreamError,
 	}
 	return h, nil
 }
@@ -94,7 +98,11 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, retried bool) 
 		act.Begin()
 		defer act.End()
 	}
-	h.rp.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), retriedKey{}, retried)))
+	ctx := context.WithValue(r.Context(), retriedKey{}, retried)
+	if h.isPageLoad(r) {
+		ctx = markPageLoad(ctx)
+	}
+	h.rp.ServeHTTP(w, r.WithContext(ctx))
 }
 
 // upstreamError runs before anything was written to w. A refused connection

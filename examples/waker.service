@@ -1,0 +1,18 @@
+# A systemd user unit for waker.
+#   cp examples/waker.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now waker
+#   loginctl enable-linger "$USER"   # keep it running without a login session
+[Unit]
+Description=waker: scale-to-zero front for self-hosted apps
+After=network.target
+
+[Service]
+ExecStart=%h/go/bin/waker serve --config %h/.config/waker/waker.yaml
+Restart=always
+RestartSec=2
+# The default SIGTERM lets waker drain connections and stop the apps it started.
+TimeoutStopSec=60
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
