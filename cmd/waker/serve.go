@@ -1,0 +1,42 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"log/slog"
+	"os/signal"
+	"syscall"
+
+	"github.com/fum4/waker/internal/config"
+	"github.com/fum4/waker/internal/daemon"
+	"github.com/fum4/waker/internal/version"
+)
+
+func runServe(args []string, _, stderr io.Writer) error {
+	fs, cfgFlag := newFlagSet("serve", stderr)
+	jsonLogs := fs.Bool("log-json", false, "log JSON lines instead of text")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() > 0 {
+		return fmt.Errorf("%w: unexpected argument %q", errUsage, fs.Arg(0))
+	}
+	cfg, err := config.Load(config.ResolvePath(*cfgFlag))
+	if err != nil {
+		return err
+	}
+	var h slog.Handler = slog.NewTextHandler(stderr, nil)
+	if *jsonLogs {
+		h = slog.NewJSONHandler(stderr, nil)
+	}
+	log := slog.New(h)
+	log.Info("waker starting", "version", version.String(), "apps", len(cfg.Apps))
+	d, err := daemon.New(cfg, log)
+	if err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	return d.Run(ctx)
+}
