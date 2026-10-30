@@ -128,7 +128,7 @@ func (a App) validate(field string, add addFunc) {
 		add(field+".stop", "the first argv element must be a command")
 	}
 	if !a.Mode.Valid() {
-		add(field+".mode", "%q must be on, off or on-demand", a.Mode)
+		add(field+".mode", "%q must be on, off or on-demand%s", a.Mode, boolModeHint(a.Mode))
 	}
 	if a.Idle <= 0 {
 		add(field+".idle", "must be positive")
@@ -205,4 +205,17 @@ func (a App) validateMemorySource(field string, add addFunc) {
 			add(field+".systemd_unit", "is required for memory_source: systemd")
 		}
 	}
+}
+
+// boolModeHint explains a boolean-looking mode: waker reads YAML 1.2,
+// where bare on and off are strings, but a YAML 1.1 tool (PyYAML, yq v3)
+// that rewrote the file turns them into true and false.
+func boolModeHint(m Mode) string {
+	switch strings.ToLower(string(m)) {
+	case "true", "yes":
+		return " (write on; a YAML 1.1 tool may have rewritten on as true)"
+	case "false", "no":
+		return " (write off; a YAML 1.1 tool may have rewritten off as false)"
+	}
+	return ""
 }

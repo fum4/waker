@@ -5,6 +5,7 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
 ## [Unreleased]
 
 ### Added
+- `waker check`: a `mode` of `true`/`yes` or `false`/`no` says to write `on` or `off`, since a YAML 1.1 tool may have rewritten them. Bare `on`/`off` were always fine (YAML 1.2); the docs no longer say to quote them.
 - `waker service install|uninstall|status`: run waker as a systemd user unit (Linux) or a LaunchAgent (macOS); `--system` for a system unit or LaunchDaemon. The unit runs `waker serve --config <absolute path>` from the config's directory, with the installer's PATH, and restarts on failure. `--dry-run` prints the unit and the commands. install prints the `sudo loginctl enable-linger` line when linger is off, and the `sudo` line for `--system`; waker never runs sudo. install and uninstall never touch a unit they didn't write without `--force`. `status` shows state, pid and where the logs are, and exits 3 when not running. Replaces `examples/waker.service`.
 - `$WAKER_CONTROL_SOCKET` overrides the default control socket (the file's `control_socket` still wins). A `--system` systemd service listens on `/run/waker/control.sock`; the CLI falls back to it when the file sets no socket and nothing listens on the default. `waker status` ends with the socket it used.
 - `waker check` warns when a `start` or `stop` command isn't an executable on the installed service's PATH (else this shell's).

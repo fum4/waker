@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,5 +173,32 @@ func TestControlSocketDefaults(t *testing.T) {
 	cfg, _ = Parse([]byte("control_socket: /srv/w.sock\n" + app))
 	if cfg.ControlSocket != "/srv/w.sock" || !cfg.ControlSocketSet() {
 		t.Errorf("file wins: %s, set %v", cfg.ControlSocket, cfg.ControlSocketSet())
+	}
+}
+
+// waker reads YAML 1.2: bare on and off are the modes, not booleans. A
+// YAML 1.1 rewrite (true/yes, false/no) fails with a hint saying so.
+func TestBareOnOffAndTheBooleanHint(t *testing.T) {
+	const app = "apps:\n  - {name: web, listen: 127.0.0.1:20080, upstream: http://127.0.0.1:20081, start: [x], mode: %s}\n"
+	for _, m := range []string{"on", "off", "on-demand"} {
+		cfg, err := Parse([]byte(fmt.Sprintf(app, m)))
+		if err != nil || cfg.Validate() != nil || string(cfg.Apps[0].Mode) != m {
+			t.Errorf("bare %s: err %v, mode %q", m, err, cfg.Apps[0].Mode)
+		}
+	}
+	for v, want := range map[string]string{
+		"true":      "(write on; a YAML 1.1 tool may have rewritten on as true)",
+		"Yes":       "(write on;",
+		"false":     "(write off; a YAML 1.1 tool may have rewritten off as false)",
+		"no":        "(write off;",
+		"sometimes": "must be on, off or on-demand\n",
+	} {
+		cfg, err := Parse([]byte(fmt.Sprintf(app, v)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error()+"\n", want) {
+			t.Errorf("mode %s: %v; want %q", v, err, want)
+		}
 	}
 }

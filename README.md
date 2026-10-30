@@ -75,7 +75,7 @@ apps:
     boot_timeout: 600s              # default 600s
     waiting: page                   # default page · page | hold (browsers; programs are always held)
     hold_timeout: 60s               # default 60s, or boot_timeout if shorter
-    mode: on-demand                 # default on-demand · "on" | "off" | on-demand
+    mode: on-demand                 # default on-demand · on | off | on-demand
     idle: 30m                       # default 30m (here it would inherit 15m from defaults)
     idle_ignore: [/api/version]     # default [] · exact paths that never count or wake
     heartbeat: true                 # default true
@@ -153,7 +153,7 @@ Sizes take a unit (`512MiB`, `2GiB`, `768M`; `0` needs none). Durations are Go d
 | `boot_timeout` | `600s` | Not healthy by then = failed (then 120 s cooldown). |
 | `waiting` | `page` | Browsers during a boot: starting page, or `hold`. |
 | `hold_timeout` | `60s`, or `boot_timeout` if shorter | How long a held request waits. |
-| `mode` | `on-demand` | `on` · `off` · `on-demand` (quote `"on"`/`"off"`). |
+| `mode` | `on-demand` | `on` · `off` · `on-demand`. |
 | `idle` | `30m` | On-demand: stop after this long without activity. |
 | `idle_ignore` | `[]` | Paths that never count as activity or wake. |
 | `heartbeat` | `true` | Inject the keep-awake script into HTML pages. |
