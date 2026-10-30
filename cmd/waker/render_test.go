@@ -125,3 +125,20 @@ func TestStatusWithoutAWaker(t *testing.T) {
 		t.Fatalf("mode with one arg = %d", code)
 	}
 }
+
+func TestOffWarning(t *testing.T) {
+	tests := []struct {
+		name string
+		snap app.Snapshot
+		want string
+	}{
+		{"off, dependents up", app.Snapshot{Name: "db", Mode: config.ModeOff, KeptUpBy: []string{"api", "web"}}, "warning: db is off while api, web (up) still need it"},
+		{"off, no dependents", app.Snapshot{Name: "db", Mode: config.ModeOff}, ""},
+		{"on-demand, dependents up", app.Snapshot{Name: "db", Mode: config.ModeOnDemand, KeptUpBy: []string{"api"}}, ""},
+	}
+	for _, tt := range tests {
+		if got := offWarning(tt.snap); got != tt.want {
+			t.Errorf("%s: offWarning = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}

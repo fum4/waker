@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/fum4/waker/internal/app"
@@ -97,7 +98,7 @@ func runMode(args []string, stdout, stderr io.Writer) error {
 	if len(pos) != 2 {
 		return fmt.Errorf("%w: mode <app> on|off|on-demand [--idle 10s]", errUsage)
 	}
-	return setMode(*cfgFlag, stdout, control.ModeRequest{App: pos[0], Mode: config.Mode(pos[1]), Idle: config.Duration(*idle)})
+	return setMode(*cfgFlag, stdout, stderr, control.ModeRequest{App: pos[0], Mode: config.Mode(pos[1]), Idle: config.Duration(*idle)})
 }
 
 func runReset(args []string, stdout, stderr io.Writer) error {
@@ -109,10 +110,10 @@ func runReset(args []string, stdout, stderr io.Writer) error {
 	if len(pos) != 1 {
 		return fmt.Errorf("%w: reset <app>", errUsage)
 	}
-	return setMode(*cfgFlag, stdout, control.ModeRequest{App: pos[0], Reset: true})
+	return setMode(*cfgFlag, stdout, stderr, control.ModeRequest{App: pos[0], Reset: true})
 }
 
-func setMode(cfgFlag string, stdout io.Writer, req control.ModeRequest) error {
+func setMode(cfgFlag string, stdout, stderr io.Writer, req control.ModeRequest) error {
 	c, err := client(cfgFlag)
 	if err != nil {
 		return err
@@ -122,5 +123,17 @@ func setMode(cfgFlag string, stdout io.Writer, req control.ModeRequest) error {
 		return err
 	}
 	renderStatus(stdout, snap, time.Now())
+	if w := offWarning(snap); w != "" {
+		fmt.Fprintln(stderr, w)
+	}
 	return nil
+}
+
+// offWarning flags switching off an app its up dependents still need. It is
+// allowed (the operator asked for it); they just lose what they need.
+func offWarning(s app.Snapshot) string {
+	if s.Mode != config.ModeOff || len(s.KeptUpBy) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("warning: %s is off while %s (up) still need it", s.Name, strings.Join(s.KeptUpBy, ", "))
 }
