@@ -20,6 +20,7 @@ const (
 	dim    = "\x1b[2m"
 	red    = "\x1b[31m"
 	green  = "\x1b[32m"
+	yellow = "\x1b[33m"
 	cyan   = "\x1b[36m"
 	accent = "\x1b[38;5;155m" // waker's lime (#c6ff4a), as near as 256 colours get
 	// up moves the cursor to the line above and clears it.
@@ -77,7 +78,7 @@ type Question struct {
 
 // Ask asks q until it gets a valid answer.
 func (p *Prompter) Ask(q Question) (string, error) {
-	for {
+	for lines := 1; ; lines += 2 {
 		line := "  " + p.style("❯", accent, bold) + " " + p.style(q.Label, bold)
 		if q.Hint != "" {
 			line += " " + p.style("· "+q.Hint, dim)
@@ -102,7 +103,7 @@ func (p *Prompter) Ask(q Question) (string, error) {
 			fmt.Fprintf(p.out, "    %s\n", p.style("✖ "+err.Error(), red))
 			continue
 		}
-		p.answered(q.Label, ans)
+		p.answered(lines, q.Label, ans)
 		return ans, nil
 	}
 }
@@ -113,7 +114,7 @@ func (p *Prompter) Confirm(label string, def bool) (bool, error) {
 	if def {
 		choices = "Y/n"
 	}
-	for {
+	for lines := 1; ; lines += 2 {
 		fmt.Fprintf(p.out, "  %s %s %s ", p.style("❯", accent, bold), p.style(label, bold), p.style("["+choices+"]", dim))
 		ans, err := p.readLine()
 		if err != nil {
@@ -134,18 +135,27 @@ func (p *Prompter) Confirm(label string, def bool) (bool, error) {
 		if yes {
 			word = "yes"
 		}
-		p.answered(label, word)
+		p.answered(lines, label, word)
 		return yes, nil
 	}
 }
 
-// answered redraws the question as a ✔ line (in colour, over the prompt).
-func (p *Prompter) answered(label, ans string) {
+// labelWidth lines answered values up in a column (the longest question
+// label init asks, "Start command").
+const labelWidth = 13
+
+// answered redraws the question as one ✔ line (in colour), clearing its
+// lines on screen: the prompt, plus a rejected answer and its ✖ for each
+// retry.
+func (p *Prompter) answered(lines int, label, ans string) {
 	if !p.color {
 		return
 	}
-	fmt.Fprintf(p.out, "%s  %s %s %s\n", up, p.style("✔", green), p.style(label, dim), p.style(ans, cyan))
+	fmt.Fprintf(p.out, "%s  %s %s %s\n", strings.Repeat(up, lines), p.style("✔", green), p.style(fmt.Sprintf("%-*s", labelWidth, label), dim), p.style(ans, cyan))
 }
+
+// Warn prints a ⚠ line.
+func (p *Prompter) Warn(msg string) { fmt.Fprintf(p.out, "  %s %s\n", p.style("⚠", yellow), msg) }
 
 // Done prints a ✔ status line.
 func (p *Prompter) Done(msg string) { fmt.Fprintf(p.out, "  %s %s\n", p.style("✔", green), msg) }

@@ -78,8 +78,7 @@ func runSetup(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if _, err := os.Stat(path); err == nil && !f.force {
-		fmt.Fprintf(stdout, "using %s\n", path)
-		if err := runCheck([]string{"--config", path}, stdout, stderr); err != nil {
+		if err := report(p, "using", path, stdout, stderr); err != nil {
 			return err
 		}
 	} else if path, err = writeConfig(f, p, stdout, stderr); err != nil {
@@ -138,8 +137,7 @@ func writeConfig(f *initFlags, p *prompt.Prompter, stdout, stderr io.Writer) (st
 	if err := os.WriteFile(path, a.Render(), 0o644); err != nil {
 		return "", err
 	}
-	fmt.Fprintf(stdout, "\nwrote %s\n", path)
-	return path, runCheck([]string{"--config", path}, stdout, stderr)
+	return path, report(p, "wrote", path, stdout, stderr)
 }
 
 func refuseOverwrite(path string, force bool) error {
@@ -173,7 +171,7 @@ func offerInstall(p *prompt.Prompter, path string, stdout, stderr io.Writer) err
 	yes, err := p.Confirm("Install as a service now?", true)
 	if err != nil || !yes {
 		if err == nil {
-			p.Note("later: waker service install --config " + path)
+			p.Note("later: waker service install --config " + displayPath(path))
 		}
 		return err
 	}

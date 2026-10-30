@@ -60,9 +60,22 @@ var currentHost = service.CurrentHost
 // installed service's PATH, else (none installed) on this shell's, which
 // is what `waker service install` would capture.
 func checkServicePATH(cfg *config.Config, cfgPath string, w io.Writer) error {
+	warnings, source, err := servicePATHWarnings(cfg, cfgPath)
+	for _, msg := range warnings {
+		fmt.Fprintf(w, "warning: %s\n", msg)
+	}
+	if len(warnings) > 0 {
+		fmt.Fprintf(w, "(checked against %s)\n", source)
+	}
+	return err
+}
+
+// servicePATHWarnings returns pathWarnings against the PATH the service
+// has (or would capture), and which PATH that was.
+func servicePATHWarnings(cfg *config.Config, cfgPath string) (warnings []string, source string, err error) {
 	abs, err := filepath.Abs(cfgPath)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
 	path, source := os.Getenv("PATH"), "this shell's PATH (no service installed)"
 	if h, err := currentHost(); err == nil {
@@ -70,14 +83,7 @@ func checkServicePATH(cfg *config.Config, cfgPath string, w io.Writer) error {
 			path, source = p, "the PATH in "+unit
 		}
 	}
-	warnings := pathWarnings(cfg, path, filepath.Dir(abs))
-	for _, msg := range warnings {
-		fmt.Fprintf(w, "warning: %s\n", msg)
-	}
-	if len(warnings) > 0 {
-		fmt.Fprintf(w, "(checked against %s)\n", source)
-	}
-	return nil
+	return pathWarnings(cfg, path, filepath.Dir(abs)), source, nil
 }
 
 func runVersion(args []string, stdout, stderr io.Writer) error {

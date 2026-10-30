@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fum4/waker/internal/config"
 )
@@ -93,7 +94,8 @@ func TestInitInteractive(t *testing.T) {
 	}
 	for _, want := range []string{
 		"◆ waker init", "❯ App name (notes)", `✖ "abc" is not a port`, "✖ waker already answers on that port",
-		"wrote " + path, "ok — 1 app(s)", "❯ Install as a service now? [Y/n]", "later: waker service install --config " + path,
+		"✔ wrote " + path, "✔ waker check: ok", "notes  127.0.0.1:20090 → http://127.0.0.1:20091 · on-demand · sleeps after 5m",
+		"❯ Install as a service now? [Y/n]", "later: waker service install --config ",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout lacks %q:\n%s", want, stdout)
@@ -171,5 +173,14 @@ func TestSetupInteractiveWithAConfig(t *testing.T) {
 	code, stdout, _ := runCLI("setup", "--config", path)
 	if code != 0 || !strings.Contains(stdout, "using "+path) || !strings.Contains(stdout, "Install as a service now?") {
 		t.Fatalf("= %d\n%s", code, stdout)
+	}
+}
+
+func TestShortDuration(t *testing.T) {
+	for d, want := range map[string]string{"30m": "30m", "1h": "1h", "1h30m": "1h30m", "45s": "45s", "1m30s": "1m30s"} {
+		v, _ := time.ParseDuration(d)
+		if got := shortDuration(config.Duration(v)); got != want {
+			t.Errorf("shortDuration(%s) = %s, want %s", d, got, want)
+		}
 	}
 }
