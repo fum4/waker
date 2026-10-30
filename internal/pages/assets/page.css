@@ -15,7 +15,7 @@
   --faint: #7c7a91;
   --line-strong: rgba(255, 255, 255, 0.14);
   --sig-glow: color-mix(in srgb, var(--sig) 60%, transparent);
-  --warm: #ff8a4c;
+  --failed: #f2c14e;
   --logo-bg: #000;
   --sans: "Geist", system-ui, sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -33,8 +33,20 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* --state is the page's state colour: the decode line and the contact link's underline both
+   follow it. Neutral by default; set per data-page, so wait.js's in-place starting → end swap
+   (it rewrites body.dataset.page) recolours both with no script involvement. */
 body {
+  --state: var(--dim);
   margin: 0;
+}
+
+[data-page="starting"] {
+  --state: var(--sig);
+}
+
+[data-page="failed"] {
+  --state: var(--failed);
 }
 
 main {
@@ -78,17 +90,17 @@ h1 {
   line-height: 1.45;
 }
 
-/* The branding.contact link: the text colour, underlined in the accent. */
+/* The branding.contact link: the text colour, underlined in the state colour. */
 #text a {
   color: var(--fg);
   text-decoration: underline;
-  text-decoration-color: var(--sig);
+  text-decoration-color: var(--state);
   text-underline-offset: 0.2em;
   overflow-wrap: anywhere;
 }
 
 /* The decode line: six 0/1 glyphs and a block cursor. On the starting page each glyph flips at
-   its own offset and the cursor blinks; elsewhere the line is still and dim (warm on failed).
+   its own offset and the cursor blinks; elsewhere the line is still and faded (amber on failed).
    The starting page animates even under prefers-reduced-motion: it is the progress signal. */
 .decode {
   display: flex;
@@ -96,7 +108,7 @@ h1 {
   margin-top: 2.5rem;
   font: 500 18px/1 var(--mono);
   letter-spacing: 3px;
-  color: var(--dim);
+  color: var(--state);
   opacity: 0.3;
   user-select: none;
 }
@@ -117,12 +129,13 @@ h1 {
   background: currentColor;
 }
 
+/* At the shared 0.3 fade amber turns muddy olive on --ink; 0.7 keeps it amber, still calmer
+   than the starting page's full-strength accent. */
 [data-page="failed"] .decode {
-  color: var(--warm);
+  opacity: 0.7;
 }
 
 [data-page="starting"] .decode {
-  color: var(--sig);
   opacity: 1;
   text-shadow: 0 0 8px var(--sig-glow);
 }
