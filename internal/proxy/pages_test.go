@@ -39,7 +39,7 @@ func TestBareAnswersAreHeadersOnly(t *testing.T) {
 
 func TestBareKeepsTheWakerAssetsAndStatus(t *testing.T) {
 	l := newLive(t, func(a *config.App) { a.Pages = config.Pages{Bare: true} })
-	if resp, body := l.do(t, "GET", "/__waker/status", nil); resp.StatusCode != 200 || body != `{"state":"down"}` {
+	if resp, body := l.do(t, "GET", "/__waker/status", nil); resp.StatusCode != 200 || body != `{"state":"asleep"}` {
 		t.Fatalf("status = %d %q", resp.StatusCode, body)
 	}
 	if resp, body := l.do(t, "GET", "/__waker/wait.js", nil); resp.StatusCode != 200 || body != string(pages.Wait()) {
