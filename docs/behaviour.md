@@ -60,7 +60,7 @@ For an app with [`depends_on`](configuration.md#depends_on-per-app-or-in-default
 
 - **Wake order.** Waking the app wakes every dependency first, in parallel, each as if a request had woken it: its own memory check and eviction, its own boot. A dependency that is already up isn't booted. The app's own memory check and start wait until all of them are healthy; it shows `starting` throughout. Its `boot_timeout` covers the whole boot, dependencies included.
 - **Failure.** If a dependency ends failed or busy, is in mode `off` (it is never woken then), or isn't up within the app's `boot_timeout`, the app's boot fails without starting it, and `waker status` names the dependency: `failed — dependency db: offline (mode off)`. The usual 120 s cooldown applies.
-- **Keep-up.** While a dependent that waker started is up, booting or stopping, the dependency has no idle deadline and is never evicted. `waker status` shows it as `needed by: api`.
+- **Keep-up.** While a dependent that waker started is up, booting or stopping, the dependency has no idle deadline and is never evicted. `waker status` shows it as `needed by: api`. `waker mode db off` still stops it (an operator's explicit call), and warns: `warning: db is off while api (up) still need it`.
 - **Release.** When the last dependent stops (idle, eviction, mode `off`, shutdown), the dependency's idle clock restarts from that moment, so it stops after its own `idle`.
 - **Shutdown** stops dependents before their dependencies.
 

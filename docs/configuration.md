@@ -165,4 +165,4 @@ Waking `api` wakes `db` and `cache` first, and they stay up while `api` is; see 
 - the app itself, or a name listed twice;
 - a cycle, reported once (`apps[0] (api).depends_on: cycle api → db → api`).
 
-Set in `defaults`, the list applies to every app, the named ones included: give each of those its own `depends_on: []`, or `waker check` reports `defaults.depends_on[0]: db depends on itself`.
+Set in `defaults`, the list applies to every app, and an app named in it drops itself from its inherited copy: `defaults: {depends_on: [db]}` makes every app but `db` need `db`. An app's own list naming itself is still an error.

@@ -6,6 +6,18 @@ import (
 	"strings"
 )
 
+// dropInheritedSelfDeps removes an app's own name from a depends_on list it
+// inherited from defaults: "every app needs db" must not make db need
+// itself. An app's own list naming itself stays an error.
+func (c *Config) dropInheritedSelfDeps() {
+	for i := range c.Apps {
+		a := &c.Apps[i]
+		if c.inherited.fromDefaults(i, "depends_on") {
+			a.DependsOn = slices.DeleteFunc(slices.Clone(a.DependsOn), func(n string) bool { return n == a.Name })
+		}
+	}
+}
+
 // validateDependsOn checks every app's depends_on against the configured
 // names (unknown, itself, listed twice), then reports each cycle once.
 func (c *Config) validateDependsOn(names map[string]int, add addFunc) {

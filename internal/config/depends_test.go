@@ -52,6 +52,24 @@ func TestDependsOnValid(t *testing.T) {
 	}
 }
 
+// A defaults list naming an app applies to every other app; the named one
+// drops itself. Its own list naming itself stays an error (see below).
+func TestInheritedDependsOnDropsTheAppItself(t *testing.T) {
+	cfg, err := Parse([]byte(depsConfig("  depends_on: [db]\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string][]string{"api": {"db"}, "db": {}, "cache": {"db"}}
+	for _, a := range cfg.Apps {
+		if !slices.Equal(a.DependsOn, want[a.Name]) {
+			t.Errorf("%s depends_on = %v, want %v", a.Name, a.DependsOn, want[a.Name])
+		}
+	}
+}
+
 func TestDependsOnProblems(t *testing.T) {
 	tests := []struct {
 		name string
@@ -73,8 +91,6 @@ func TestDependsOnProblems(t *testing.T) {
 			[]string{`apps[1] (db).depends_on: cycle db → cache → db`}, []string{"api →"}},
 		{"inherited unknown: defaults path, once", depsConfig("  depends_on: [ghost]\n"),
 			[]string{`defaults.depends_on[0]: "ghost" is not a configured app`}, []string{"apps["}},
-		{"inherited self: defaults path, names the app", depsConfig("  depends_on: [db]\n"),
-			[]string{`defaults.depends_on[0]: db depends on itself`}, []string{"apps["}},
 		{"app's own value: app path", depsConfig("  depends_on: [db]\n", "", "[ghost]", "[]"),
 			[]string{`apps[1] (db).depends_on[0]: "ghost"`}, []string{"defaults.depends_on"}},
 	}
