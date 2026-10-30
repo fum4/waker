@@ -34,17 +34,7 @@ func (c *Config) Validate() error {
 	}
 	names, listens := map[string]int{}, map[string]int{}
 	for i, a := range c.Apps {
-		field := fmt.Sprintf("apps[%d]", i)
-		if a.Name != "" {
-			field = fmt.Sprintf("apps[%d] (%s)", i, a.Name)
-		}
-		// An inherited value is reported where it was written: defaults.<key>.
-		appAdd := func(f, format string, args ...any) {
-			if rest, ok := strings.CutPrefix(f, field+"."); ok && c.inherited.fromDefaults(i, rest) {
-				f = DefaultsKey + "." + rest
-			}
-			add(f, format, args...)
-		}
+		field, appAdd := c.appField(i, add)
 		a.validate(field, appAdd)
 		if j, dup := names[a.Name]; dup && a.Name != "" {
 			add(field+".name", "duplicates apps[%d]", j)
@@ -55,11 +45,27 @@ func (c *Config) Validate() error {
 		}
 		listens[a.Listen] = i
 	}
+	c.validateDependsOn(names, add)
 	c.Resources.validate(names, add)
 	return errors.Join(errs...)
 }
 
 type addFunc func(field, format string, args ...any)
+
+// appField returns app i's field path ("apps[1] (api)") and an add that
+// reports an inherited value where it was written: defaults.<key>.
+func (c *Config) appField(i int, add addFunc) (string, addFunc) {
+	field := fmt.Sprintf("apps[%d]", i)
+	if a := c.Apps[i]; a.Name != "" {
+		field = fmt.Sprintf("apps[%d] (%s)", i, a.Name)
+	}
+	return field, func(f, format string, args ...any) {
+		if rest, ok := strings.CutPrefix(f, field+"."); ok && c.inherited.fromDefaults(i, rest) {
+			f = DefaultsKey + "." + rest
+		}
+		add(f, format, args...)
+	}
+}
 
 func (b Branding) validate(field string, add addFunc) {
 	if b.Accent != "" && !accentPattern.MatchString(b.Accent) {

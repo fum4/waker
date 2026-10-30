@@ -106,6 +106,8 @@ type App struct {
 	Branding    Branding `yaml:"branding,omitempty"`
 	// Pages swaps the built-in visitor pages for the owner's files, or bare.
 	Pages Pages `yaml:"pages,omitempty"`
+	// DependsOn names the apps woken before this one and kept up while it is.
+	DependsOn []string `yaml:"depends_on,omitempty"`
 }
 
 // HeartbeatEnabled reports whether heartbeat injection is on for the app.
