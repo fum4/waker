@@ -13,3 +13,10 @@ Engineering follow-ups, newest last. Heading: `## <title> · <YYYY-MM-DD> · S|M
 - **What:** on macOS waker learns no peaks: `proctree` reads `/proc`, so `waker check` rejects it there and `memory_source` defaults to `none`. Every app must declare `memory`, or it counts as 1024 MiB.
 - **Why deferred:** the darwin-memory PR kept to available memory (`vm_stat`). A `ps -A -o pid=,ppid=,rss=` sampler is a second subprocess every 5 s per running app, and it can't be tested on a real Mac from the box.
 - **First step:** factor `ProcTreeRSSMiB` into "build the pid → (ppid, rss) table" (procfs on Linux, `ps` on darwin) plus the shared tree sum, then let `config.PlatformFor("darwin")` accept `proctree`. Verify on a Mac against Activity Monitor.
+
+## CI: install only the Go tools, and check infra/github · 2026-10-30 · S
+
+- **What:** `terraform` joined `.mise.toml [tools]` for `infra/github`, so `jdx/mise-action` in every `ci.yml` job now downloads it too, unused. And nothing in CI checks the Terraform: only the local `pre-push` (`tf:check`).
+- **Why deferred:** the ruleset PR keeps off `.github/` workflows.
+- **First step:** `install_args: go staticcheck` on the four jobs' `mise-action` step; add `mise run tf:check` to the `lint` job (installing terraform there only).
+

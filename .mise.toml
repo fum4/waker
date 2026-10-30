@@ -1,6 +1,7 @@
 [tools]
 go = "1.27.3"
 staticcheck = "2026.2.2"
+terraform = "1.17.1"        # infra/github: the repo's ruleset
 
 # Convention: the `setup` task is invoked once per repo on every fresh devbox
 # provision (by the `repos` Ansible role) and once on every `clone-repo` skill run.
@@ -28,13 +29,60 @@ run = "scripts/test-log.sh"
 description = "Build the waker binary into ./bin"
 run = "go build -trimpath -o bin/waker ./cmd/waker"
 
+# GitHub ruleset (infra/github; devbox docs/ci.md § Public repos) — `mise run
+# tf:github -- plan`. Provider auth is the devbox's own gh identity (prefix
+# assignment: the token never lands in argv); the R2 state-backend creds come in
+# memory from secrets/waker-terraform-state.env.age (devbox docs/repo-secrets.md §
+# Terraform via repo-secrets exec). The AWS_* overrides stop a personal ~/.aws
+# profile shadowing them.
+[tasks."tf:github"]
+description = "terraform in infra/github (the repo ruleset) with gh auth + R2 creds in memory (mise run tf:github -- plan)"
+run = '''GITHUB_TOKEN="$(gh auth token)" repo-secrets exec secrets/waker-terraform-state.env.age -- env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE -u AWS_SESSION_TOKEN AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_CONFIG_FILE=/dev/null terraform -chdir=infra/github'''
+
+# -backend=false init into its own data dir: no creds needed, and a real
+# `tf:github -- init` in infra/github/.terraform is left alone. Providers resolve
+# from the committed .terraform.lock.hcl.
+[tasks."tf:check"]
+description = "Format-check + validate infra/github, offline (pre-push runs it)"
+env = { TF_DATA_DIR = ".terraform-check" }
+run = [
+  "terraform -chdir=infra/github fmt -check -recursive",
+  "terraform -chdir=infra/github init -backend=false -input=false -lockfile=readonly >/dev/null",
+  "terraform -chdir=infra/github validate",
+]
+
 # The hook tasks (devbox docs/ci.md § Repo tasks): git push runs pre-push, wt
 # pre-merge runs pre-merge.
 [tasks.pre-push]
-description = "Static checks: gofmt · go vet · staticcheck"
-depends = ["lint"]
+description = "Static checks: gofmt · go vet · staticcheck · terraform fmt/validate"
+depends = ["lint", "tf:check"]
 
 [tasks.pre-merge]
 description = "Tests (race, log kept: scripts/test-log.sh) · build before merge (wt pre-merge)"
 depends = ["lint"]
 run = ["scripts/test-log.sh", "go build ./..."]
+
+# ── Secrets (repo-secrets engine; devbox docs/repo-secrets.md) ─────────────
+[tasks."secrets:decrypt"]
+description = "Materialize file/sshkey secrets, then render the generated env files (with <age>s: only those rows)"
+run = "repo-secrets decrypt"
+
+[tasks."secrets:clean"]
+description = "Remove materialized plaintext a .age restores (--render: also the generated env files; --all: also ~/.ssh keys)"
+run = "repo-secrets clean"
+
+[tasks."secrets:encrypt"]
+description = "Re-encrypt file/sshkey secrets from their plaintext (unchanged ones left alone)"
+run = "repo-secrets encrypt"
+
+[tasks."secrets:render"]
+description = "Regenerate every render-row env file from committed config + secrets"
+run = "repo-secrets render"
+
+[tasks."secrets:edit"]
+description = "Edit one secret in a tmpfs copy, re-encrypt, re-render (mise run secrets:edit <age>)"
+run = "repo-secrets edit"
+
+[tasks."secrets:check"]
+description = "Every manifest row has its sources (exit 1 otherwise)"
+run = "repo-secrets check"
