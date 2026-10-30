@@ -1,0 +1,150 @@
+package config
+
+import (
+	"errors"
+	"fmt"
+	"net"
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+)
+
+var (
+	namePattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+	accentPattern = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
+)
+
+// Validate checks the whole config and reports every problem at once, each
+// prefixed with the offending field's path (e.g. "apps[1].priority").
+func (c *Config) Validate() error {
+	var errs []error
+	add := func(field, format string, args ...any) {
+		errs = append(errs, fmt.Errorf("%s: %s", field, fmt.Sprintf(format, args...)))
+	}
+	if c.MinHeadroom < 0 || c.MaxHeadroom < 0 {
+		add("max_headroom", "headroom must not be negative")
+	}
+	if c.MinHeadroom > c.MaxHeadroom {
+		add("min_headroom", "%s exceeds max_headroom %s", c.MinHeadroom, c.MaxHeadroom)
+	}
+	c.Branding.validate(add)
+	if len(c.Apps) == 0 {
+		add("apps", "at least one app is required")
+	}
+	names, listens := map[string]int{}, map[string]int{}
+	for i, a := range c.Apps {
+		field := fmt.Sprintf("apps[%d]", i)
+		if a.Name != "" {
+			field = fmt.Sprintf("apps[%d] (%s)", i, a.Name)
+		}
+		a.validate(field, add)
+		if j, dup := names[a.Name]; dup && a.Name != "" {
+			add(field+".name", "duplicates apps[%d]", j)
+		}
+		names[a.Name] = i
+		if j, dup := listens[a.Listen]; dup && a.Listen != "" {
+			add(field+".listen", "%s is already used by apps[%d]", a.Listen, j)
+		}
+		listens[a.Listen] = i
+	}
+	return errors.Join(errs...)
+}
+
+type addFunc func(field, format string, args ...any)
+
+func (b Branding) validate(add addFunc) {
+	if b.Accent != "" && !accentPattern.MatchString(b.Accent) {
+		add("branding.accent", "%q is not a #rgb or #rrggbb colour", b.Accent)
+	}
+	if b.Logo == "" {
+		return
+	}
+	switch strings.ToLower(filepath.Ext(b.Logo)) {
+	case ".svg", ".png":
+	default:
+		add("branding.logo", "%s must be an .svg or .png file", b.Logo)
+		return
+	}
+	if st, err := os.Stat(b.Logo); err != nil {
+		add("branding.logo", "%v", err)
+	} else if st.IsDir() {
+		add("branding.logo", "%s is a directory", b.Logo)
+	}
+}
+
+func (a App) validate(field string, add addFunc) {
+	if !namePattern.MatchString(a.Name) {
+		add(field+".name", "%q must be lowercase letters, digits and dashes", a.Name)
+	}
+	if _, port, err := net.SplitHostPort(a.Listen); err != nil || port == "" {
+		add(field+".listen", "%q is not a host:port address", a.Listen)
+	}
+	if u, err := url.Parse(a.Upstream); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		add(field+".upstream", "%q is not an http(s)://host:port URL", a.Upstream)
+	}
+	if len(a.Start) == 0 || a.Start[0] == "" {
+		add(field+".start", "an argv list is required, e.g. [\"./run\", \"--port\", \"3000\"]")
+	}
+	if len(a.Stop) > 0 && a.Stop[0] == "" {
+		add(field+".stop", "the first argv element must be a command")
+	}
+	if !a.Mode.Valid() {
+		add(field+".mode", "%q must be on, off or on-demand", a.Mode)
+	}
+	if a.Idle <= 0 {
+		add(field+".idle", "must be positive")
+	}
+	for j, p := range a.IdleIgnore {
+		if !strings.HasPrefix(p, "/") {
+			add(fmt.Sprintf("%s.idle_ignore[%d]", field, j), "%q must start with /", p)
+		}
+	}
+	if a.Memory < 0 {
+		add(field+".memory", "must not be negative")
+	}
+	if a.Priority < MinPriority || a.Priority > MaxPriority {
+		add(field+".priority", "%d must be %d–%d", a.Priority, MinPriority, MaxPriority)
+	}
+	if a.BootTimeout <= 0 {
+		add(field+".boot_timeout", "must be positive")
+	}
+	if a.StopTimeout <= 0 {
+		add(field+".stop_timeout", "must be positive")
+	}
+	a.Health.validate(field+".health", add)
+	a.Peak.validate(field+".peak", add)
+}
+
+func (h Health) validate(field string, add addFunc) {
+	switch {
+	case h.Path != "" && len(h.Command) > 0:
+		add(field, "set path or command, not both")
+	case h.Path != "" && !strings.HasPrefix(h.Path, "/"):
+		add(field+".path", "%q must start with /", h.Path)
+	case len(h.Command) > 0 && h.Command[0] == "":
+		add(field+".command", "the first argv element must be a command")
+	}
+	if h.Interval <= 0 {
+		add(field+".interval", "must be positive")
+	}
+	if h.Timeout <= 0 {
+		add(field+".timeout", "must be positive")
+	}
+}
+
+func (p Peak) validate(field string, add addFunc) {
+	switch p.Source {
+	case PeakProcTree, PeakNone:
+		if p.Unit != "" {
+			add(field+".unit", "only applies to source: systemd")
+		}
+	case PeakSystemd:
+		if p.Unit == "" {
+			add(field+".unit", "is required for source: systemd")
+		}
+	default:
+		add(field+".source", "%q must be proctree, systemd or none", p.Source)
+	}
+}
