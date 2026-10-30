@@ -8,10 +8,13 @@ resources:
   eviction:
     protect: [docs]
 
-branding:
-  # logo: ./logo.svg     # an SVG or PNG; the built-in mark when omitted
-  accent: "#5ad1ff"
-  name: Example Co
+# Every app inherits these unless it sets the key itself.
+defaults:
+  idle: 10m
+  branding:
+    # logo: ./logo.svg     # an SVG or PNG; the built-in mark when omitted
+    accent: "#5ad1ff"
+    name: Example Co
 
 apps:
   # A tiny static site: Python's built-in server, woken on demand.
@@ -20,7 +23,6 @@ apps:
     upstream: http://127.0.0.1:3000
     start: [python3, -m, http.server, "3000", --bind, 127.0.0.1]
     cwd: ./site
-    idle: 10m
     priority: 8
     memory: 64MiB
 

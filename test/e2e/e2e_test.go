@@ -55,7 +55,7 @@ func setup(t *testing.T) *harness {
 	write(t, logo, string(h.logo))
 	h.config = filepath.Join(dir, "waker.yaml")
 	write(t, h.config, "state_dir: "+dir+"/state\ncontrol_socket: "+dir+"/run/control.sock\n"+
-		"branding: {logo: "+logo+", accent: '#ff3366'}\napps:\n  - name: shop\n    listen: '"+h.listen+"'\n"+
+		"defaults: {branding: {logo: "+logo+", accent: '#ff3366'}}\napps:\n  - name: shop\n    listen: '"+h.listen+"'\n"+
 		"    upstream: 'http://"+h.appAddr+"'\n    start: ["+fakeapp+", -listen, '"+h.appAddr+"']\n"+
 		"    health: {path: /healthz, interval: 100ms}\n    idle: 2s\n")
 	return h

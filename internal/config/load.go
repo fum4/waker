@@ -53,18 +53,50 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// Parse decodes YAML strictly (unknown keys are errors) and applies defaults.
-// It does not validate; Load does.
+// file is the YAML as written: the config plus the defaults block, which
+// Parse folds into each app.
+type file struct {
+	Config   `yaml:",inline"`
+	Defaults App `yaml:"defaults"`
+}
+
+// Parse decodes YAML strictly (unknown keys are errors), merges the
+// defaults block into every app (app > defaults > built-in) and applies the
+// built-in defaults. It does not validate; Load does.
 func Parse(data []byte) (*Config, error) {
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return nil, err
+	}
+	if len(root.Content) == 0 {
+		return nil, errors.New("config is empty")
+	}
+	if doc := root.Content[0]; doc.Kind == yaml.MappingNode {
+		if b := lookup(doc, "branding"); b != nil {
+			return nil, fmt.Errorf("line %d: branding moved: put it under defaults (defaults.branding) or in an app", b.Line)
+		}
+	}
+	// The strict pass catches unknown keys and bad values with their real
+	// line numbers, defaults included. The merged tree holds only keys it
+	// accepted, so its decode below need not be strict (yaml.Node offers no
+	// strict decode).
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
-	var cfg Config
-	if err := dec.Decode(&cfg); err != nil {
+	if err := dec.Decode(&file{}); err != nil {
 		if errors.Is(err, io.EOF) {
 			return nil, errors.New("config is empty")
 		}
 		return nil, err
 	}
+	got, err := applyDefaultsBlock(&root)
+	if err != nil {
+		return nil, err
+	}
+	var cfg Config
+	if err := root.Decode(&cfg); err != nil {
+		return nil, err
+	}
+	cfg.inherited = got
 	cfg.applyDefaults()
 	return &cfg, nil
 }
@@ -116,12 +148,13 @@ func (a *App) applyDefaults() {
 func (c *Config) resolvePaths(base string) {
 	c.StateDir = resolvePath(base, c.StateDir)
 	c.ControlSocket = resolvePath(base, c.ControlSocket)
-	if c.Branding.Logo != "" {
-		c.Branding.Logo = resolvePath(base, c.Branding.Logo)
-	}
 	for i := range c.Apps {
-		if c.Apps[i].Cwd != "" {
-			c.Apps[i].Cwd = resolvePath(base, c.Apps[i].Cwd)
+		a := &c.Apps[i]
+		if a.Cwd != "" {
+			a.Cwd = resolvePath(base, a.Cwd)
+		}
+		if a.Branding.Logo != "" {
+			a.Branding.Logo = resolvePath(base, a.Branding.Logo)
 		}
 	}
 }
