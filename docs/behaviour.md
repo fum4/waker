@@ -6,7 +6,7 @@
 
    | Path | Answer |
    |---|---|
-   | `POST active` | The heartbeat: counts as activity, 204. |
+   | `POST active` | Counts as activity, 204; never wakes the app. The heartbeat and [program keepalives](#keepalive-for-programs) use it. |
    | `status` | `{"state": …}` for this app only. |
    | `font.woff2`, `logo`, `heartbeat.js`, `wait.js` | The page assets, cacheable for an hour. |
    | anything else | 404. |
@@ -90,6 +90,18 @@ For an app with `heartbeat: true`:
 2. **The injection.** A whole, uncompressed `200 text/html` response of up to 5 MiB gets `<script src="/__waker/heartbeat.js" defer>` before its last `</body>`. Its Content-Length is fixed and its ETag dropped.
 3. **Pass-through.** HEAD, 304, compressed and larger responses pass through byte-for-byte.
 4. **The script.** At most once a minute, while the tab is visible and the visitor gave input within the last minute, it sends `POST /__waker/active`.
+
+## Keepalive for programs
+
+A client that isn't a browser page (a worker, a dashboard, a long CLI session) keeps an on-demand app awake between its requests with the heartbeat's endpoint: `POST /__waker/active` on the app's `listen` address, more often than `idle` (e.g. every minute).
+
+- **What it does:** records activity now, exactly like the end of a forwarded request, so the idle deadline moves to now + `idle` (and a disarmed clock re-arms). Answers 204, no body, `no-store`.
+- **What it doesn't:** it never wakes a stopped app and is never forwarded. It answers 204 in every mode and state, `off` and down included, so it isn't a health check: wake the app with a real request, and read its state from `GET /__waker/status`.
+- Any other method on `/__waker/active` is a 404.
+
+## Traffic must go through `listen`
+
+waker sees only requests that reach its `listen` address. A caller that talks to the app's `upstream` port directly bypasses it: no wake, no activity, no in-flight count. The app can then be idle-stopped (or evicted) while that caller is still using it. Point every client, reverse proxy and tunnel at `listen`, and bind the upstream to `127.0.0.1` so nothing outside the host can reach it.
 
 ## Memory
 

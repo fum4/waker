@@ -54,7 +54,7 @@ defaults:
 | `health.interval` / `health.timeout` | `1s` / `2s` | How often health is polled while booting, and how long one probe may take. |
 | `boot_timeout` | `600s` | A boot that isn't healthy by then fails. A failed boot answers "failed" for 120 s before the next request may retry. |
 | `waiting` | `page` | What a browser gets while the app boots: `page` (the starting page at once) or `hold` (the request waits for the app, like a program's). Programs are always held; see [behaviour.md](behaviour.md#a-request-step-by-step). |
-| `hold_timeout` | `60s` (capped at `boot_timeout`) | How long a held request waits. Then a browser gets the failed page and a program 503 JSON. At most `boot_timeout`. |
+| `hold_timeout` | `60s`, or `boot_timeout` if shorter | How long a held request waits. Then a browser gets the failed page and a program 503 `{"state":"starting"}`; the boot carries on. Set explicitly, it may not exceed `boot_timeout`. |
 | `mode` | `on-demand` | `on`, `off` or `on-demand`. Quote `"on"` and `"off"`, or YAML may read them as booleans. |
 | `idle` | `30m` | On-demand only: stop after this long without activity. |
 | `idle_ignore` | `[]` | Exact paths (query excluded) that are neither activity nor a reason to wake, e.g. a version poller. |
@@ -107,8 +107,8 @@ resources:
 1. waker picks candidates: apps it started that are `on-demand`, up, with nothing in flight, not protected, not kept up by a [dependent](#depends_on-per-app-or-in-defaults), and of a lower priority (or equal, under `lower-or-equal`).
 2. If stopping all of them couldn't cover the shortfall, nothing is stopped and the visitor sees "busy".
 3. Otherwise it stops them one at a time in the configured order, re-measuring after each, and boots as soon as there's room.
+
 `on`-mode apps, and apps inside a [schedule](#schedule-per-app-or-in-defaults) window, are never evicted.
-`on`-mode apps are never evicted.
 
 ## `branding` (per app, or in `defaults`)
 
