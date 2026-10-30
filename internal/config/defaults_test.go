@@ -59,6 +59,10 @@ func TestDefaultsPrecedence(t *testing.T) {
 			func(w, a App) bool {
 				return w.Branding.Accent == "#222" && w.Branding.Name == "Acme" && a.Branding.Accent == "#111"
 			}},
+		{"contact merges per key", "  branding: {contact: hello@example.com}\n", "    branding: {contact: https://example.com/help}\n",
+			func(w, a App) bool {
+				return w.Branding.Contact == "https://example.com/help" && a.Branding.Contact == "hello@example.com"
+			}},
 		{"list: app replaces", "  idle_ignore: [/a, /b]\n", "    idle_ignore: [/c]\n",
 			func(w, a App) bool {
 				return slices.Equal(w.IdleIgnore, []string{"/c"}) && slices.Equal(a.IdleIgnore, []string{"/a", "/b"})
@@ -117,6 +121,9 @@ func TestDefaultsValidationNamesTheRealPath(t *testing.T) {
 			[]string{`defaults.branding.accent: "lime"`}, []string{"(web).branding.accent", "(api).branding.accent"}},
 		{"map sub-key from the app", "  branding: {name: Acme}\n", "    branding: {accent: lime}\n",
 			[]string{`apps[0] (web).branding.accent: "lime"`}, []string{"defaults.branding"}},
+		{"inherited contact", "  branding: {contact: http://example.com}\n", "    branding: {name: Acme}\n",
+			[]string{`defaults.branding.contact: "http://example.com" is not an email address or an https:// URL`},
+			[]string{"(web).branding.contact", "(api).branding.contact"}},
 		{"list element", "  idle_ignore: [nope]\n", "",
 			[]string{`defaults.idle_ignore[0]: "nope"`}, nil},
 	}
