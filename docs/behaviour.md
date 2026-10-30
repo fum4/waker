@@ -31,7 +31,7 @@
 
 With [`pages: bare`](configuration.md#pages-per-app-or-in-defaults), every page and JSON answer above is the status and headers alone.
 
-**Connection cap:** each app's listener accepts at most 64 concurrent connections. Beyond that, a connection gets an immediate 503 `{"state":"busy"}`.
+**Connection cap:** each app's listener accepts at most 64 concurrent connections. Beyond that, a connection gets an immediate 503 `{"state":"busy"}` (with `pages: bare`, the 503 alone).
 
 ## States
 

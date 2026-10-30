@@ -174,12 +174,36 @@ func TestMalformedContentLengthIs400(t *testing.T) {
 }
 
 func TestConnectionCapAnswers503(t *testing.T) {
+	tests := []struct {
+		name string
+		bare bool
+		want func([]byte) bool
+	}{
+		{"busy JSON", false, func(b []byte) bool { return bytes.HasSuffix(b, []byte(`{"state":"busy"}`)) }},
+		{"bare: headers only", true, func(b []byte) bool {
+			return bytes.HasSuffix(b, []byte("\r\n\r\n")) && bytes.Contains(b, []byte("Content-Length: 0\r\n")) &&
+				!bytes.Contains(b, []byte("Content-Type"))
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := overCap(t, tt.bare)
+			if !bytes.HasPrefix(got, []byte("HTTP/1.1 503")) || !bytes.Contains(got, []byte("Retry-After: 10\r\n")) || !tt.want(got) {
+				t.Fatalf("= %q", got)
+			}
+		})
+	}
+}
+
+// overCap fills a cap of one connection and returns what a second one reads.
+func overCap(t *testing.T, bare bool) []byte {
+	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	srv := &http.Server{Handler: http.NotFoundHandler()}
-	go func() { _ = srv.Serve(LimitListener(ln, 1)) }()
+	go func() { _ = srv.Serve(LimitListener(ln, 1, bare)) }()
 	defer srv.Close()
 	hold, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
@@ -194,9 +218,7 @@ func TestConnectionCapAnswers503(t *testing.T) {
 	defer c.Close()
 	_ = c.SetDeadline(time.Now().Add(5 * time.Second))
 	got, _ := io.ReadAll(c)
-	if !bytes.HasPrefix(got, []byte("HTTP/1.1 503")) || !bytes.Contains(got, []byte(`{"state":"busy"}`)) {
-		t.Fatalf("= %q", got)
-	}
+	return got
 }
 
 func TestASlowRequestIsInFlightUntilItEnds(t *testing.T) {

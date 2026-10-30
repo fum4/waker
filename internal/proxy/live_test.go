@@ -122,7 +122,7 @@ func newLiveProc(t *testing.T, mutate func(*config.App), setup func(*liveProcess
 		t.Fatal(err)
 	}
 	srv := &http.Server{Handler: h}
-	go func() { _ = srv.Serve(LimitListener(ln, MaxConnections)) }()
+	go func() { _ = srv.Serve(LimitListener(ln, MaxConnections, pg.Bare())) }()
 	// Let a running boot finish first: stopping under it would leave it polling
 	// a dead upstream until boot_timeout.
 	t.Cleanup(func() { srv.Close(); a.Wait(); _ = proc.Stop(context.Background()) })
