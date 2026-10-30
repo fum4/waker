@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/fum4/waker/internal/config"
 )
 
 // Available reports memory free for a new app.
@@ -19,8 +21,18 @@ type Available interface {
 	AvailableMiB() (int64, error)
 }
 
-// Meminfo reads MemAvailable from a Linux meminfo file. It is the only
-// source today; macOS and others plug in behind Available.
+// ForSource returns the reader for a resources.available_source value.
+func ForSource(src string) (Available, error) {
+	switch src {
+	case config.AvailableMeminfo:
+		return NewMeminfo(), nil
+	case config.AvailableVMStat:
+		return VMStat{}, nil
+	}
+	return nil, fmt.Errorf("resources.available_source: %q has no reader", src)
+}
+
+// Meminfo reads MemAvailable from a Linux meminfo file.
 type Meminfo struct{ Path string }
 
 // NewMeminfo reads /proc/meminfo.
@@ -48,7 +60,8 @@ func (m Meminfo) AvailableMiB() (int64, error) {
 }
 
 // ProcTreeRSSMiB sums the resident memory of root and all its descendants,
-// read from procfs, rounded up to MiB. A vanished root reads as 0.
+// read from procfs, rounded up to MiB. A vanished root reads as 0. Linux
+// only: config rejects memory_source: proctree where there is no /proc.
 func ProcTreeRSSMiB(procfs string, root int) int64 {
 	children := map[int][]int{}
 	entries, _ := os.ReadDir(procfs)

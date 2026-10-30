@@ -58,7 +58,12 @@ func New(cfg *config.Config, log *slog.Logger) (*Daemon, error) {
 // newWithClock is New with the apps' clock injected (tests use a Fake).
 func newWithClock(cfg *config.Config, log *slog.Logger, clk clock.Clock) (*Daemon, error) {
 	d := &Daemon{cfg: cfg, log: log, pages: map[string]*pages.Pages{}, sig: idle.NewSignal(), skipped: map[string]string{},
-		procs: map[string]*boot.Process{}, avail: memory.NewMeminfo()}
+		procs: map[string]*boot.Process{}}
+	avail, err := memory.ForSource(cfg.Resources.AvailableSource)
+	if err != nil {
+		return nil, err
+	}
+	d.avail = avail
 	for _, ac := range cfg.Apps {
 		pg, err := pages.New(ac)
 		if err != nil {

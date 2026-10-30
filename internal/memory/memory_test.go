@@ -3,6 +3,7 @@ package memory
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -108,6 +109,9 @@ func TestMeminfo(t *testing.T) {
 	write(t, path, "MemTotal: 1 kB\n")
 	if _, err := (Meminfo{Path: path}).AvailableMiB(); err == nil {
 		t.Fatal("missing line accepted")
+	}
+	if runtime.GOOS != "linux" {
+		return
 	}
 	if got, err := NewMeminfo().AvailableMiB(); err != nil || got <= 0 {
 		t.Fatalf("the real /proc/meminfo = %d, %v", got, err)
