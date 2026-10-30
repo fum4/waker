@@ -1,0 +1,160 @@
+/* Every visitor page's look. Geist (SIL OFL 1.1) is served by the waker itself:
+   pages make no external requests. --sig is the branding accent. */
+@font-face {
+  font-family: "Geist";
+  src: url("/__waker/font.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --ink: #0c0b12;
+  --fg: #ecebf3;
+  --soft: #b9b7c8;
+  --dim: #8a889c;
+  --faint: #7c7a91;
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --sig-glow: color-mix(in srgb, var(--sig) 60%, transparent);
+  --warm: #ff8a4c;
+  --logo-bg: #000;
+  --sans: "Geist", system-ui, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--ink);
+  color: var(--fg);
+  font: 400 16px/1.28 var(--sans);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: 14vh 1.5rem 3rem;
+  text-align: center;
+}
+
+.logo {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 2.75rem;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--logo-bg);
+}
+
+.logo img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+#text {
+  margin: 0.75rem 0 0;
+  color: var(--soft);
+  line-height: 1.45;
+}
+
+/* The decode line: six 0/1 glyphs and a block cursor. On the starting page each glyph flips at
+   its own offset and the cursor blinks; elsewhere the line is still and dim (warm on failed).
+   The starting page animates even under prefers-reduced-motion: it is the progress signal. */
+.decode {
+  display: flex;
+  align-items: center;
+  margin-top: 2.5rem;
+  font: 500 18px/1 var(--mono);
+  letter-spacing: 3px;
+  color: var(--dim);
+  opacity: 0.3;
+  user-select: none;
+}
+
+.decode span {
+  width: 14px;
+  text-align: center;
+}
+
+.decode span::after {
+  content: attr(data-g);
+}
+
+.decode .cursor {
+  width: 9px;
+  height: 18px;
+  margin-left: 6px;
+  background: currentColor;
+}
+
+[data-page="failed"] .decode {
+  color: var(--warm);
+}
+
+[data-page="starting"] .decode {
+  color: var(--sig);
+  opacity: 1;
+  text-shadow: 0 0 8px var(--sig-glow);
+}
+
+/* Negative delays, one step apart: the glyphs are already out of phase at first paint. */
+[data-page="starting"] .decode span::after {
+  animation: flip 0.9s steps(1) infinite;
+}
+
+[data-page="starting"] .decode span:nth-child(2)::after { animation-delay: -0.15s; }
+[data-page="starting"] .decode span:nth-child(3)::after { animation-delay: -0.3s; }
+[data-page="starting"] .decode span:nth-child(4)::after { animation-delay: -0.45s; }
+[data-page="starting"] .decode span:nth-child(5)::after { animation-delay: -0.6s; }
+[data-page="starting"] .decode span:nth-child(6)::after { animation-delay: -0.75s; }
+
+[data-page="starting"] .decode .cursor {
+  box-shadow: 0 0 8px var(--sig-glow);
+  animation: blink 1s steps(1) infinite;
+}
+
+/* `content` animates discretely (Chromium, Firefox, Safari): steps(1) holds each keyframe. */
+@keyframes flip {
+  0% { content: "1"; opacity: 1; }
+  25% { content: "0"; opacity: 0.5; }
+  50% { content: "1"; opacity: 0.8; }
+  75% { content: "0"; opacity: 0.35; }
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.name {
+  margin: 2.5rem 0 0;
+  font: 400 13px/1.28 var(--mono);
+  color: var(--faint);
+  letter-spacing: 0.04em;
+}
+
+@media (min-width: 720px) {
+  main { padding-top: 18vh; }
+  h1 { font-size: 2.125rem; }
+  #text { font-size: 1.0625rem; }
+}
