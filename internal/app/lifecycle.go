@@ -20,8 +20,10 @@ func (a *App) Stop(why string) {
 
 // stopCommitted runs a stop already committed in the tracker. It records
 // what OnStop needs (the memory peak) first, and holds the lifecycle lock so
-// a new boot cannot start until the old process is fully gone.
+// a new boot cannot start until the old process is fully gone. Its
+// dependencies' idle clocks restart once it is (defers run last-first).
 func (a *App) stopCommitted(why string) {
+	defer a.releaseDeps()
 	defer a.activity.EndStop()
 	a.life.Lock()
 	defer a.life.Unlock()
@@ -52,7 +54,8 @@ func (a *App) Evict(by *App) bool {
 }
 
 // DeadlineIn returns the time left until an idle stop; ok is false when
-// none is pending (not on-demand, booting, disarmed or a request in flight).
+// none is pending (not on-demand, booting, kept up by a dependent, disarmed
+// or a request in flight).
 func (a *App) DeadlineIn() (time.Duration, bool) {
 	a.mu.Lock()
 	if a.modeLocked() != config.ModeOnDemand || a.booting {
@@ -61,6 +64,9 @@ func (a *App) DeadlineIn() (time.Duration, bool) {
 	}
 	idle := a.idleLocked()
 	a.mu.Unlock()
+	if a.keptUp() {
+		return 0, false
+	}
 	return a.activity.DeadlineIn(idle)
 }
 
@@ -74,6 +80,11 @@ func (a *App) Tick() {
 	}
 	idle := a.idleLocked()
 	a.mu.Unlock()
+	// A dependent starting after this check first marks itself in flight on
+	// a (wakeDep), so Expire then fails or the dependent waits for the stop.
+	if a.keptUp() {
+		return
+	}
 	if a.activity.Expire(idle) {
 		a.stopCommitted("idle " + idle.String())
 	}

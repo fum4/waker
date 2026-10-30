@@ -30,11 +30,15 @@ type fakeProcess struct {
 	overlap   bool // a Start ran while a Stop was in progress
 	probes    int
 	probeWait time.Duration
+	onStart   func() // runs first in Start, unlocked
 }
 
 func newFake() *fakeProcess { return &fakeProcess{comesUp: true} }
 
 func (f *fakeProcess) Start() (<-chan error, error) {
+	if f.onStart != nil {
+		f.onStart()
+	}
 	f.mu.Lock()
 	f.runs = append(f.runs, "start")
 	if f.inStop {
@@ -90,6 +94,8 @@ func (f *fakeProcess) Stop(context.Context) error {
 }
 
 func (f *fakeProcess) setUp(up bool) { f.mu.Lock(); f.up = up; f.mu.Unlock() }
+
+func (f *fakeProcess) isUp() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.up }
 
 func (f *fakeProcess) Runs() []string {
 	f.mu.Lock()

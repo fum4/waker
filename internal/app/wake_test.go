@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/fum4/waker/internal/config"
 )
@@ -99,7 +100,7 @@ func TestACrashingBootIsAFailureNotStuckStarting(t *testing.T) {
 	f.app.mu.Lock()
 	f.app.claimBootLocked() // skip Wake's own probe, which would panic first
 	f.app.mu.Unlock()
-	f.app.goBackground(func() { f.app.boot(nil) })
+	f.app.goBackground(func() { f.app.boot(nil, f.clock.Now().Add(time.Minute)) })
 	f.app.Wait()
 	if f.app.Booting() || !strings.Contains(f.app.bootErr, "boot crashed: probe exploded") {
 		t.Fatalf("booting %v, err %q", f.app.Booting(), f.app.bootErr)
