@@ -1,6 +1,5 @@
-# goreleaser v2 config (verified against v2.19.0). Releases are cut by hand
-# for now (`goreleaser release --clean` with a GITHUB_TOKEN); there is
-# deliberately no CI workflow yet.
+# goreleaser v2 config (verified against v2.19.0). A v* tag runs it in
+# .github/workflows/release.yml, which publishes the GitHub Release.
 version: 2
 
 project_name: waker
@@ -24,7 +23,7 @@ archives:
     files: [LICENSE, README.md, CHANGELOG.md, docs/*, examples/*]
 
 checksum:
-  name_template: checksums.txt
+  name_template: SHA256SUMS
 
 changelog:
   use: github
