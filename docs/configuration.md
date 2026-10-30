@@ -6,7 +6,7 @@ waker reads one YAML file. It takes the first of these that is set:
 2. `$WAKER_CONFIG`;
 3. `./waker.yaml`.
 
-Unknown keys are errors, so typos fail loudly. `waker check` validates the file and reports every problem at once, each with its field path, e.g. `apps[1] (api).priority: 12 must be a number from 1 to 10`. Relative paths (`state_dir`, `control_socket`, `branding.logo`, `cwd`) resolve against the config file's directory, and `~/` is expanded.
+Unknown keys are errors, so typos fail loudly. `waker check` validates the file and reports every problem at once, each with its field path, e.g. `apps[1] (api).priority: 12 must be a number from 1 to 10`. A bad value inherited from `defaults` is reported once, at its real path (`defaults.idle: must be positive`). `waker check --effective` prints every app's resolved config, defaults applied. Relative paths (`state_dir`, `control_socket`, `branding.logo`, `cwd`) resolve against the config file's directory, and `~/` is expanded.
 
 **Sizes** are written like `512MiB`, `2GiB` or `768M`. A unit is required, and the single-letter units are binary too (`1G` = `1GiB`). **Durations** are Go durations: `10s`, `5m`, `1h30m`.
 
@@ -17,8 +17,26 @@ Unknown keys are errors, so typos fail loudly. `waker check` validates the file 
 | `state_dir` | `$XDG_STATE_HOME/waker`, else `~/.local/state/waker` | Holds `modes.json` (runtime mode overrides) and `peaks.json` (learned memory peaks). Created 0700. |
 | `control_socket` | `$XDG_RUNTIME_DIR/waker/control.sock`, else `<state_dir>/control.sock` | The CLI's unix socket. Its directory is 0700 and the socket 0600. |
 | `resources` | see below | Memory policy. |
-| `branding` | see below | The look of visitor pages. |
+| `defaults` | – | App keys every app inherits; see below. |
 | `apps` | required | One entry per app. |
+
+## `defaults`
+
+Any `apps[]` key except `name`, `listen`, `upstream`, `start` and `stop` (they identify one app) can be set once here:
+
+```yaml
+defaults:
+  idle: 10m
+  priority: 4
+  health: {path: /healthz}
+  branding: {accent: "#5ad1ff", name: Example Co}
+```
+
+**Precedence:** the app's own value, then `defaults`, then the built-in default.
+
+- **Scalars** (`idle`, `mode`, `priority`, …): the app's value wins.
+- **Maps** (`health`, `branding`, `env`) merge per key: an app with `branding: {accent: "#f36"}` keeps the default `name` and `logo`. In `health`, `path` and `command` are one choice: an app that sets either inherits neither.
+- **Lists** (`idle_ignore`): the app's list replaces the default one; `[]` clears it.
 
 ## `apps[]`
 
@@ -44,6 +62,7 @@ Unknown keys are errors, so typos fail loudly. `waker check` validates the file 
 | `memory_source` | `proctree` | Where the peak is learned from: `proctree` (RSS of the started process tree, sampled every 5 s), `systemd` (needs `systemd_unit`; reads the unit's `MemoryPeak`), or `none`. |
 | `headroom` | – | An absolute headroom for this app, replacing the curve. |
 | `evictable` | `true` | `false` means this app is never evicted. |
+| `branding` | see below | The look of this app's visitor pages; usually set once in `defaults`. |
 
 ## `resources`
 
@@ -86,7 +105,7 @@ resources:
 
 `on`-mode apps are never evicted.
 
-## `branding`
+## `branding` (per app, or in `defaults`)
 
 | Key | Default | Meaning |
 |---|---|---|

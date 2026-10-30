@@ -39,19 +39,22 @@ type Config struct {
 	// ControlSocket is the unix socket the CLI talks to.
 	ControlSocket string    `yaml:"control_socket"`
 	Resources     Resources `yaml:"resources"`
-	Branding      Branding  `yaml:"branding"`
 	Apps          []App     `yaml:"apps"`
+
+	// inherited is what each app took from the defaults block, so
+	// validation names the key the owner actually wrote.
+	inherited inherited
 }
 
 // Branding customises the pages visitors see while an app is not up.
 type Branding struct {
 	// Logo is an SVG or PNG file served at /__waker/logo; empty = built-in mark.
-	Logo string `yaml:"logo"`
+	Logo string `yaml:"logo,omitempty"`
 	// Accent is a CSS hex colour (#rgb or #rrggbb) for the indicator.
-	Accent string `yaml:"accent"`
+	Accent string `yaml:"accent,omitempty"`
 	// Name is the brand behind the logo (its alt text); the line under the
 	// indicator is always the app name.
-	Name string `yaml:"name"`
+	Name string `yaml:"name,omitempty"`
 }
 
 // App is one application the waker fronts.
@@ -62,22 +65,22 @@ type App struct {
 	// Start and Stop are argv lists, run without a shell. An empty Stop means
 	// SIGTERM to the started process group (SIGKILL after StopTimeout).
 	Start       []string          `yaml:"start"`
-	Stop        []string          `yaml:"stop"`
+	Stop        []string          `yaml:"stop,omitempty"`
 	StopTimeout Duration          `yaml:"stop_timeout"`
-	Cwd         string            `yaml:"cwd"`
-	Env         map[string]string `yaml:"env"`
+	Cwd         string            `yaml:"cwd,omitempty"`
+	Env         map[string]string `yaml:"env,omitempty"`
 	Health      Health            `yaml:"health"`
 	Mode        Mode              `yaml:"mode"`
 	Idle        Duration          `yaml:"idle"`
-	IdleIgnore  []string          `yaml:"idle_ignore"`
+	IdleIgnore  []string          `yaml:"idle_ignore,omitempty"`
 	// Memory is the declared need; the learned peak raises it.
-	Memory Size `yaml:"memory"`
+	Memory Size `yaml:"memory,omitempty"`
 	// MemorySource is where the learned peak comes from; SystemdUnit names
 	// the unit when it is systemd.
 	MemorySource MemorySource `yaml:"memory_source"`
-	SystemdUnit  string       `yaml:"systemd_unit"`
+	SystemdUnit  string       `yaml:"systemd_unit,omitempty"`
 	// Headroom, when set, replaces the curve's headroom for this app.
-	Headroom Size `yaml:"headroom"`
+	Headroom Size `yaml:"headroom,omitempty"`
 	// PriorityRaw is the file's value (nil = omitted); read Priority.
 	PriorityRaw *float64 `yaml:"priority"`
 	Priority    float64  `yaml:"-"`
@@ -86,6 +89,7 @@ type App struct {
 	// Heartbeat is a pointer so an omitted key can default to true.
 	Heartbeat   *bool    `yaml:"heartbeat"`
 	BootTimeout Duration `yaml:"boot_timeout"`
+	Branding    Branding `yaml:"branding,omitempty"`
 }
 
 // HeartbeatEnabled reports whether heartbeat injection is on for the app.
@@ -97,8 +101,8 @@ func (a App) IsEvictable() bool { return a.Evictable == nil || *a.Evictable }
 // Health is how the waker decides an app is up: an HTTP GET of Path on the
 // upstream answering below 400 (redirects count as up), or Command exiting 0.
 type Health struct {
-	Path     string   `yaml:"path"`
-	Command  []string `yaml:"command"`
+	Path     string   `yaml:"path,omitempty"`
+	Command  []string `yaml:"command,omitempty"`
 	Interval Duration `yaml:"interval"`
 	Timeout  Duration `yaml:"timeout"`
 }

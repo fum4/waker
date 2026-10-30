@@ -20,10 +20,15 @@ var (
 // prefixed with the offending field's path (e.g. "apps[1].priority").
 func (c *Config) Validate() error {
 	var errs []error
+	seen := map[string]bool{}
 	add := func(field, format string, args ...any) {
-		errs = append(errs, fmt.Errorf("%s: %s", field, fmt.Sprintf(format, args...)))
+		// A bad inherited value fails in every app the same way: say it once.
+		msg := fmt.Sprintf("%s: %s", field, fmt.Sprintf(format, args...))
+		if !seen[msg] {
+			seen[msg] = true
+			errs = append(errs, errors.New(msg))
+		}
 	}
-	c.Branding.validate(add)
 	if len(c.Apps) == 0 {
 		add("apps", "at least one app is required")
 	}
@@ -33,7 +38,14 @@ func (c *Config) Validate() error {
 		if a.Name != "" {
 			field = fmt.Sprintf("apps[%d] (%s)", i, a.Name)
 		}
-		a.validate(field, add)
+		// An inherited value is reported where it was written: defaults.<key>.
+		appAdd := func(f, format string, args ...any) {
+			if rest, ok := strings.CutPrefix(f, field+"."); ok && c.inherited.fromDefaults(i, rest) {
+				f = DefaultsKey + "." + rest
+			}
+			add(f, format, args...)
+		}
+		a.validate(field, appAdd)
 		if j, dup := names[a.Name]; dup && a.Name != "" {
 			add(field+".name", "duplicates apps[%d]", j)
 		}
@@ -49,9 +61,9 @@ func (c *Config) Validate() error {
 
 type addFunc func(field, format string, args ...any)
 
-func (b Branding) validate(add addFunc) {
+func (b Branding) validate(field string, add addFunc) {
 	if b.Accent != "" && !accentPattern.MatchString(b.Accent) {
-		add("branding.accent", "%q is not a #rgb or #rrggbb colour", b.Accent)
+		add(field+".accent", "%q is not a #rgb or #rrggbb colour", b.Accent)
 	}
 	if b.Logo == "" {
 		return
@@ -59,13 +71,13 @@ func (b Branding) validate(add addFunc) {
 	switch strings.ToLower(filepath.Ext(b.Logo)) {
 	case ".svg", ".png":
 	default:
-		add("branding.logo", "%s must be an .svg or .png file", b.Logo)
+		add(field+".logo", "%s must be an .svg or .png file", b.Logo)
 		return
 	}
 	if st, err := os.Stat(b.Logo); err != nil {
-		add("branding.logo", "%v", err)
+		add(field+".logo", "%v", err)
 	} else if st.IsDir() {
-		add("branding.logo", "%s is a directory", b.Logo)
+		add(field+".logo", "%s is a directory", b.Logo)
 	}
 }
 
@@ -113,6 +125,7 @@ func (a App) validate(field string, add addFunc) {
 		add(field+".stop_timeout", "must be positive")
 	}
 	a.Health.validate(field+".health", add)
+	a.Branding.validate(field+".branding", add)
 	a.validateMemorySource(field, add)
 }
 
