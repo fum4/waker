@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // PageHTML is the body of /html.
@@ -21,7 +20,6 @@ const InjectCap = 5 << 20
 //
 //	/html, /html-gz, /html-big   HTML (ETag "v1", 304 on If-None-Match), gzip-labelled, past the cap
 //	/stream                      HTTP/1.0 close-delimited body "streamed-body"
-//	/slow                        answers after 2s
 //	/headers                     JSON of the request's headers and body
 //	POST *                       echoes the body
 //	GET *                        "app:<uri>" with two Set-Cookie headers
@@ -37,9 +35,6 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		stream(w)
 	case p == "/headers":
 		headers(w, r)
-	case p == "/slow":
-		time.Sleep(2 * time.Second)
-		_, _ = io.WriteString(w, "slow")
 	case r.Method == http.MethodPost:
 		_ = http.NewResponseController(w).EnableFullDuplex()
 		_, _ = io.Copy(w, r.Body)
