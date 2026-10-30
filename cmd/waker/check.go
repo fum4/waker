@@ -3,9 +3,12 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"text/tabwriter"
 
 	"github.com/fum4/waker/internal/config"
+	"github.com/fum4/waker/internal/service"
 	"github.com/fum4/waker/internal/version"
 )
 
@@ -43,7 +46,38 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%g\t%s\n",
 			a.Name, a.Listen, a.Upstream, a.Mode, a.Idle, a.Priority, mem)
 	}
-	return tw.Flush()
+	if err := tw.Flush(); err != nil {
+		return err
+	}
+	return checkServicePATH(cfg, path, stdout)
+}
+
+// currentHost is the host check reads the installed service from; tests
+// swap in a fake one.
+var currentHost = service.CurrentHost
+
+// checkServicePATH warns about commands the service won't find: on the
+// installed service's PATH, else (none installed) on this shell's, which
+// is what `waker service install` would capture.
+func checkServicePATH(cfg *config.Config, cfgPath string, w io.Writer) error {
+	abs, err := filepath.Abs(cfgPath)
+	if err != nil {
+		return err
+	}
+	path, source := os.Getenv("PATH"), "this shell's PATH (no service installed)"
+	if h, err := currentHost(); err == nil {
+		if p, unit, ok := service.ServicePATH(h); ok {
+			path, source = p, "the PATH in "+unit
+		}
+	}
+	warnings := pathWarnings(cfg, path, filepath.Dir(abs))
+	for _, msg := range warnings {
+		fmt.Fprintf(w, "warning: %s\n", msg)
+	}
+	if len(warnings) > 0 {
+		fmt.Fprintf(w, "(checked against %s)\n", source)
+	}
+	return nil
 }
 
 func runVersion(args []string, stdout, stderr io.Writer) error {

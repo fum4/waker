@@ -56,7 +56,13 @@ type Config struct {
 	// inherited is what each app took from the defaults block, so
 	// validation names the key the owner actually wrote.
 	inherited inherited
+	// controlSocketSet records a control_socket written in the file.
+	controlSocketSet bool
 }
+
+// ControlSocketSet reports whether the file names its control socket; if
+// not, ControlSocket is a default the CLI may not share with the daemon.
+func (c *Config) ControlSocketSet() bool { return c.controlSocketSet }
 
 // Branding customises the pages visitors see while an app is not up.
 type Branding struct {

@@ -15,6 +15,15 @@ import (
 // EnvConfig names the environment variable that points at the config file.
 const EnvConfig = "WAKER_CONFIG"
 
+// EnvControlSocket overrides the default control socket (the file's
+// control_socket still wins).
+const EnvControlSocket = "WAKER_CONTROL_SOCKET"
+
+// SystemControlSocket is where a Linux system service (waker service
+// install --system) listens: its RuntimeDirectory, which has no
+// XDG_RUNTIME_DIR to agree on with a login shell.
+const SystemControlSocket = "/run/waker/control.sock"
+
 // DefaultPath is the config file used when neither flag nor env names one.
 const DefaultPath = "waker.yaml"
 
@@ -108,6 +117,7 @@ func (c *Config) applyDefaults() {
 	if c.StateDir == "" {
 		c.StateDir = defaultStateDir()
 	}
+	c.controlSocketSet = c.ControlSocket != ""
 	if c.ControlSocket == "" {
 		c.ControlSocket = defaultControlSocket(c.StateDir)
 	}
@@ -191,7 +201,12 @@ func defaultStateDir() string {
 	return "~/.local/state/waker"
 }
 
+// defaultControlSocket is $WAKER_CONTROL_SOCKET (a system service sets it),
+// else under $XDG_RUNTIME_DIR, else in the state dir.
 func defaultControlSocket(stateDir string) string {
+	if s := os.Getenv(EnvControlSocket); s != "" {
+		return s
+	}
 	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
 		return filepath.Join(d, "waker", "control.sock")
 	}

@@ -153,3 +153,24 @@ func TestResolvePath(t *testing.T) {
 		t.Errorf("flag = %q", got)
 	}
 }
+
+func TestControlSocketDefaults(t *testing.T) {
+	const app = "apps:\n  - {name: web, listen: 127.0.0.1:20080, upstream: http://127.0.0.1:20081, start: [x]}\n"
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	t.Setenv(EnvControlSocket, "")
+	cfg, err := Parse([]byte(app))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ControlSocket != "/run/user/1000/waker/control.sock" || cfg.ControlSocketSet() {
+		t.Errorf("xdg: %s, set %v", cfg.ControlSocket, cfg.ControlSocketSet())
+	}
+	t.Setenv(EnvControlSocket, SystemControlSocket)
+	if cfg, _ := Parse([]byte(app)); cfg.ControlSocket != SystemControlSocket || cfg.ControlSocketSet() {
+		t.Errorf("env: %s", cfg.ControlSocket)
+	}
+	cfg, _ = Parse([]byte("control_socket: /srv/w.sock\n" + app))
+	if cfg.ControlSocket != "/srv/w.sock" || !cfg.ControlSocketSet() {
+		t.Errorf("file wins: %s, set %v", cfg.ControlSocket, cfg.ControlSocketSet())
+	}
+}

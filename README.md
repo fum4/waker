@@ -31,7 +31,13 @@ apps:
 waker serve
 ```
 
-Run it as a service → [examples/waker.service](examples/waker.service).
+**4. Keep it running**
+
+```sh
+waker service install               # a systemd user unit (Linux) or a LaunchAgent (macOS)
+```
+
+It runs `waker serve --config <this file>`, restarts on failure and starts at boot ([details](#as-a-service)).
 
 ## Configuration
 
@@ -44,7 +50,7 @@ Each key below shows its default in the comment; leave out any key you don't cha
 ```yaml
 # ── top level ────────────────────────────────────────────────────────────
 state_dir: ~/.local/state/waker     # default $XDG_STATE_HOME/waker, else ~/.local/state/waker
-control_socket: ~/.local/state/waker/control.sock # default $XDG_RUNTIME_DIR/waker/control.sock, else <state_dir>/control.sock
+control_socket: ~/.local/state/waker/control.sock # default $WAKER_CONTROL_SOCKET, else $XDG_RUNTIME_DIR/waker/control.sock, else <state_dir>/control.sock
 
 # ── defaults: any apps[] key except name, listen, upstream, start, stop ──
 defaults:                           # default: none · app value > defaults > built-in
@@ -127,7 +133,7 @@ Sizes take a unit (`512MiB`, `2GiB`, `768M`; `0` needs none). Durations are Go d
 | Key | Default | Meaning |
 |---|---|---|
 | `state_dir` | `$XDG_STATE_HOME/waker`, else `~/.local/state/waker` | Runtime mode overrides and learned memory peaks. |
-| `control_socket` | `$XDG_RUNTIME_DIR/waker/control.sock`, else `<state_dir>/control.sock` | The CLI's unix socket. |
+| `control_socket` | `$WAKER_CONTROL_SOCKET`, else `$XDG_RUNTIME_DIR/waker/control.sock`, else `<state_dir>/control.sock` | The CLI's unix socket ([`--system`](#as-a-service): `/run/waker/control.sock`). |
 | `resources` | see below | Memory policy. |
 | `defaults` | – | App keys every app inherits. |
 | `apps` | required | One entry per app. |
@@ -221,10 +227,32 @@ waker status                         # what is up, what it needs, when it sleeps
 waker mode blog off                  # take it offline (visitors get an "offline" page)
 waker mode blog on-demand --idle 30s
 waker reset blog                     # back to the declared mode
+waker service install                # run as a service (--dry-run: print it; --system: system-wide)
+waker service status                 # state, pid, where the logs are (exit 3 when not running)
+waker service uninstall              # remove everything install wrote
 waker version
 ```
 
 From source: `go install github.com/fum4/waker/cmd/waker@latest`.
+
+### As a service
+
+`waker service install` is non-interactive, so an agent or a script can run it. It writes one unit and starts it:
+
+| | Linux (systemd) | macOS (launchd) |
+|---|---|---|
+| default | user unit, `~/.config/systemd/user/waker.service` | LaunchAgent, `~/Library/LaunchAgents/io.nomadware.waker.plist` |
+| `--system` | `/etc/systemd/system/waker.service`, `User=` you | LaunchDaemon, `/Library/LaunchDaemons/…`, `UserName` you |
+| logs | `journalctl --user -u waker.service -f` | `~/Library/Logs/waker/waker.log` |
+
+- **PATH.** A supervisor's PATH is minimal: `npm` or `python3` from your shell wouldn't be found at the first wake. The unit captures the PATH you install from (`--path` overrides it). `waker check` warns about any `start` or `stop` command missing from the installed service's PATH.
+- **Working directory.** It's the config file's directory, so `start: [./bin/api]` works as it does from there.
+- **Restarts.** waker restarts after a crash; `systemctl stop` / `launchctl bootout` leave it stopped.
+- **Linger (Linux).** A user unit stops when your last session ends unless linger is on. install and status print the exact `sudo loginctl enable-linger <you>` line; waker never runs sudo itself.
+- **Root.** `--system` needs root. Without it, install prints the `sudo …` line to run, with your PATH and user filled in.
+- **Control socket (`--system`, Linux).** A system service has no `XDG_RUNTIME_DIR` to share with your shell, so it listens on `/run/waker/control.sock` (`RuntimeDirectory=waker`). The CLI falls back to that socket when nothing listens on its default, and `waker status` ends with the socket it used.
+- **Ownership.** Every file carries a "Written by `waker service install`" marker. install never overwrites a unit you wrote yourself, and uninstall never removes one, without `--force`.
+- **Elsewhere** (no systemd, other OSes) install refuses and prints the command, PATH and restart policy to set up by hand.
 
 ## What it does
 
@@ -263,7 +291,7 @@ It only resets the idle clock. It never wakes a stopped app (send a real request
 
 - [docs/configuration.md](docs/configuration.md): every key, its default and its validation.
 - [docs/behaviour.md](docs/behaviour.md): what happens when — requests, states, idle, memory, dependencies, schedules.
-- [examples/](examples/): a sample config and a systemd unit.
+- [examples/](examples/): a sample config.
 
 ## Status
 

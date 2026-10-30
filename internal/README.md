@@ -6,6 +6,7 @@ waker's packages. Dependencies point down this list. Nothing here is importable 
 |---|---|---|
 | `schedule` | Pure cron-window math: `Active`, `At` (current window's end, merged, or the next start), `Boundary`. Wraps robfig/cron. | – |
 | `config` | The YAML model: load, defaults, field-named validation, `Size`/`Duration` types. | schedule |
+| `service` | `waker service`: plans a systemd unit or launchd plist install/uninstall as files + commands (`Plan`, printed for `--dry-run`, else `Apply`), `Status`, `ServicePATH`, `LookPath` against a given PATH. A `Host` (fake in tests, with a `Root` prefix) and a `Runner` keep it off the real machine in tests. | – |
 | `clock` | Real and fake clocks (the fake `Sleep` advances time, for tests). | – |
 | `version` | The build version (stamped by `-ldflags`). | – |
 | `idle` | The activity `Tracker` (in-flight counter, deadline from request end) and the deadline `Loop`. | clock |

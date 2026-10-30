@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -14,13 +15,34 @@ import (
 	"github.com/fum4/waker/internal/control"
 )
 
-// client resolves the control socket from the config.
-func client(cfgFlag string) (*control.Client, error) {
+// systemSocket is where a system service listens; tests point it at a
+// temp file.
+var systemSocket = config.SystemControlSocket
+
+// client resolves the control socket from the config and returns it with
+// the path it chose.
+func client(cfgFlag string) (*control.Client, string, error) {
 	cfg, err := config.Load(config.ResolvePath(cfgFlag))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return control.NewClient(cfg.ControlSocket), nil
+	path := controlSocket(cfg)
+	return control.NewClient(path), path, nil
+}
+
+// controlSocket is the config's socket, unless the file leaves it to the
+// default, nothing listens there and a system service's socket exists: a
+// `--system` daemon has no XDG_RUNTIME_DIR to share with this shell.
+func controlSocket(cfg *config.Config) string {
+	if cfg.ControlSocketSet() || isSocket(cfg.ControlSocket) || !isSocket(systemSocket) {
+		return cfg.ControlSocket
+	}
+	return systemSocket
+}
+
+func isSocket(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && st.Mode()&os.ModeSocket != 0
 }
 
 // parseInterspersed lets flags follow positional arguments
@@ -49,7 +71,7 @@ func runStatus(args []string, stdout, stderr io.Writer) error {
 	if len(pos) > 1 {
 		return fmt.Errorf("%w: status [<app>] [--json]", errUsage)
 	}
-	c, err := client(*cfgFlag)
+	c, socket, err := client(*cfgFlag)
 	if err != nil {
 		return err
 	}
@@ -76,6 +98,7 @@ func runStatus(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintln(stdout)
 		renderStatus(stdout, s, now)
 	}
+	fmt.Fprintf(stdout, "\nvia %s\n", socket)
 	return nil
 }
 
@@ -114,7 +137,7 @@ func runReset(args []string, stdout, stderr io.Writer) error {
 }
 
 func setMode(cfgFlag string, stdout, stderr io.Writer, req control.ModeRequest) error {
-	c, err := client(cfgFlag)
+	c, _, err := client(cfgFlag)
 	if err != nil {
 		return err
 	}
