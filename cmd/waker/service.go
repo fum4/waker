@@ -15,6 +15,10 @@ import (
 // code systemctl uses) when no service is running.
 var errNotRunning = exitCode(3)
 
+// serviceRunner runs systemctl and launchctl; TestMain swaps in one that
+// refuses, so no test can touch the machine's real services.
+var serviceRunner service.Runner = service.ExecRunner{}
+
 func runService(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%w: service install|uninstall|status [flags]", errUsage)
@@ -88,7 +92,7 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	if !sp.System && h.EUID == 0 && h.OS == "linux" {
 		return fmt.Errorf("%w: you are root; a user service would run in root's session: use --system", errUsage)
 	}
-	if err := plan.Apply(service.ExecRunner{}, stdout, *force); err != nil {
+	if err := plan.Apply(serviceRunner, stdout, *force); err != nil {
 		return err
 	}
 	printNotes(stdout, plan.Notes)
@@ -123,7 +127,7 @@ func runServiceUninstall(args []string, stdout, stderr io.Writer) error {
 		bin, _ := os.Executable()
 		return fmt.Errorf("a system service needs root; run:\n  %s", service.ShellJoin([]string{"sudo", bin, "service", "uninstall", "--system"}))
 	}
-	if err := plan.Apply(service.ExecRunner{}, stdout, *force); err != nil {
+	if err := plan.Apply(serviceRunner, stdout, *force); err != nil {
 		return err
 	}
 	fmt.Fprintln(stdout, "uninstalled")
@@ -142,7 +146,7 @@ func runServiceStatus(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	sts, err := service.Statuses(h, service.ExecRunner{})
+	sts, err := service.Statuses(h, serviceRunner)
 	if err != nil {
 		return err
 	}
