@@ -1,5 +1,7 @@
 # waker
 
+[![ci](https://github.com/fum4/waker/actions/workflows/ci.yml/badge.svg)](https://github.com/fum4/waker/actions/workflows/ci.yml)
+
 Scale-to-zero for self-hosted apps: waker starts an app on its first request and stops it when nobody uses it.
 
 Install one static binary (about 11 MB for linux/amd64), point a few lines of YAML at your app, and run it. No containers, no database, no external services: any app that starts from a command works.
@@ -264,6 +266,8 @@ It only resets the idle clock. It never wakes a stopped app (send a real request
 ## Status
 
 Pre-1.0. Config keys may still change, and the [CHANGELOG](CHANGELOG.md) records every change.
+
+**CI is the gate.** Every PR must pass the [`ci`](.github/workflows/ci.yml) checks (`lint`, `test`, `e2e`, `build`) before it merges. The `mise run pre-push` / `pre-merge` tasks run the same checks locally, for fast feedback. A `v*` tag publishes a release ([`release.yml`](.github/workflows/release.yml)).
 
 ## Licence
 
