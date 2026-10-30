@@ -108,6 +108,9 @@ type App struct {
 	Pages Pages `yaml:"pages,omitempty"`
 	// DependsOn names the apps woken before this one and kept up while it is.
 	DependsOn []string `yaml:"depends_on,omitempty"`
+	// Schedule lists the windows that keep the app on (mode on) whatever
+	// its declared mode; a runtime override still wins.
+	Schedule []ScheduleEntry `yaml:"schedule,omitempty"`
 }
 
 // HeartbeatEnabled reports whether heartbeat injection is on for the app.

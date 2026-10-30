@@ -142,6 +142,7 @@ func (a App) validate(field string, add addFunc) {
 	a.Branding.validate(field+".branding", add)
 	a.Pages.validate(field+".pages", add)
 	a.validateMemorySource(field, add)
+	a.validateSchedule(field, add)
 }
 
 func (h Health) validate(field string, add addFunc) {
