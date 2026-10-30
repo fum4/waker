@@ -14,7 +14,7 @@ Install one static binary (about 11 MB for linux/amd64), point a few lines of YA
 curl -fsSL https://releases.nomadware.io/waker/install.sh | sh
 ```
 
-**2. Configure** `waker.yaml`
+**2. Configure**: `waker init` asks for the app's name, ports, start command, health path and idle time, then writes `waker.yaml` and checks it. Or write the file yourself:
 
 ```yaml
 apps:
@@ -37,7 +37,7 @@ waker serve
 waker service install               # a systemd user unit (Linux) or a LaunchAgent (macOS)
 ```
 
-It runs `waker serve --config <this file>`, restarts on failure and starts at boot ([details](#as-a-service)).
+It runs `waker serve --config <this file>`, restarts on failure and starts at boot ([details](#as-a-service)). `waker setup` does steps 2 and 4 in one go.
 
 ## Configuration
 
@@ -221,6 +221,8 @@ Choose Sablier if your apps are containers behind Traefik/Caddy, or you need Kub
 The same binary is the daemon and its control client. Every command takes `--config <path>`, else `$WAKER_CONFIG`, else `./waker.yaml`.
 
 ```sh
+waker init                           # write waker.yaml for one app (prompts; --yes + flags for scripts)
+waker setup                          # init if there's no config yet, then install the service
 waker serve                          # run the daemon
 waker check                          # validate the config (--effective: print it with every default filled in)
 waker status                         # what is up, what it needs, when it sleeps (--json)
@@ -234,6 +236,17 @@ waker version
 ```
 
 From source: `go install github.com/fum4/waker/cmd/waker@latest`.
+
+### init and setup
+
+On a terminal, `waker init` prompts, with a default for every answer except the start command. It writes the file, runs `waker check` on it, then offers to install the service. Without a terminal (an agent, CI, `curl | sh`) it needs `--yes`, and takes the answers as flags:
+
+```sh
+waker init --yes --start 'npm run start' --name shop --port 8080 --upstream-port 3000 --health /healthz --idle 15m
+waker setup --yes --start 'npm run start'   # the same, then waker service install
+```
+
+It never overwrites an existing config without `--force`. `--start` is split like a shell command line (quotes, backslashes), but nothing is expanded: it's an argv. With an existing config, `setup` checks it and goes straight to the install. Ctrl-D cancels (exit 130) and writes nothing.
 
 ### As a service
 

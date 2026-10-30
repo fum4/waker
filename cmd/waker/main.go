@@ -33,6 +33,8 @@ func commands() []command {
 		{"mode", "set an app's runtime mode: mode <app> on|off|on-demand [--idle 10s]", runMode},
 		{"reset", "drop an app's runtime mode override", runReset},
 		{"check", "validate the config file and print a summary", runCheck},
+		{"init", "write a waker.yaml for one app (prompts on a terminal; --yes takes flags)", func(a []string, o, e io.Writer) error { return aborted(runInit(a, o, e)) }},
+		{"setup", "init (if there is no config yet), then install the service", func(a []string, o, e io.Writer) error { return aborted(runSetup(a, o, e)) }},
 		{"service", "install|uninstall|status: run waker as a systemd or launchd service", runService},
 		{"version", "print the waker version", runVersion},
 	}
