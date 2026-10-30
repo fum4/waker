@@ -4,14 +4,15 @@ waker's packages. Dependencies point down this list. Nothing here is importable 
 
 | Package | What it is | Depends on |
 |---|---|---|
-| `config` | The YAML model: load, defaults, field-named validation, `Size`/`Duration` types. | – |
+| `schedule` | Pure cron-window math: `Active`, `At` (current window's end, merged, or the next start), `Boundary`. Wraps robfig/cron. | – |
+| `config` | The YAML model: load, defaults, field-named validation, `Size`/`Duration` types. | schedule |
 | `clock` | Real and fake clocks (the fake `Sleep` advances time, for tests). | – |
 | `version` | The build version (stamped by `-ldflags`). | – |
 | `idle` | The activity `Tracker` (in-flight counter, deadline from request end) and the deadline `Loop`. | clock |
 | `state` | Atomic `modes.json` / `peaks.json`. | config |
 | `boot` | The start/stop/health process supervisor (own process group, SIGTERM → SIGKILL). | config |
 | `memory` | The headroom curve, the need/required `Budget`, `MemAvailable`, process-tree RSS, systemd `MemoryPeak`. | config |
-| `app` | One app's runtime: effective mode, the boot state machine, dependencies (wake first, keep up), `Wake`/`Tick`/`Stop`/`SetMode`, `Snapshot`. | idle, state, clock, memory |
+| `app` | One app's runtime: effective mode (override > schedule window > declared), the boot state machine, dependencies (wake first, keep up), `Wake`/`Tick`/`Stop`/`SetMode`, `Snapshot`. | idle, state, clock, memory, schedule |
 | `evict` | `Gate` (admission + eviction plan) implementing `app.Gate`. | app, memory |
 | `pages` | The visitor pages (built-in, or the owner's files with placeholders filled) and assets (embedded Geist, logo, heartbeat.js, wait.js); `WithTag`, the one script-tag injector. | config |
 | `proxy` | The per-app HTTP front: forwarding, waking, `/__waker/*`, heartbeat injection, connection cap. | app, pages |

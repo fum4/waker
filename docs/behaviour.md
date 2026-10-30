@@ -50,7 +50,7 @@ Boots are serialised per app: any number of concurrent requests share one boot. 
 
 - **Arming.** On-demand apps have a deadline: last activity + `idle`. waker's loop sleeps exactly until the nearest deadline, capped at 60 s.
 - **What counts as activity:** forwarded requests (non-ignored paths), measured from the request's **end**. Also heartbeats, the end of a boot, and mode changes.
-- **No deadline** exists while a request is in flight (long downloads and open WebSockets keep the app up), while the app boots, or while a [dependent](#dependencies) is up.
+- **No deadline** exists while a request is in flight (long downloads and open WebSockets keep the app up), while the app boots, or while a [dependent](#dependencies) is up. An app inside a [schedule](#schedules) window has none either: it is `on`.
 - **The stop fires once**, then stays disarmed until the next activity. It doesn't consult health: an unhealthy but running app is stopped too.
 - **A stop is committed atomically** with the in-flight check. A request that arrives while the app is stopping waits for the stop to finish, then wakes the app again; it is never forwarded to a process that is going down. A new boot waits until the previous process has fully stopped.
 
@@ -63,6 +63,24 @@ For an app with [`depends_on`](configuration.md#depends_on-per-app-or-in-default
 - **Keep-up.** While a dependent that waker started is up, booting or stopping, the dependency has no idle deadline and is never evicted. `waker status` shows it as `needed by: api`. `waker mode db off` still stops it (an operator's explicit call), and warns: `warning: db is off while api (up) still need it`.
 - **Release.** When the last dependent stops (idle, eviction, mode `off`, shutdown), the dependency's idle clock restarts from that moment, so it stops after its own `idle`.
 - **Shutdown** stops dependents before their dependencies.
+
+## Schedules
+
+For an app with a [`schedule`](configuration.md#schedule-per-app-or-in-defaults):
+
+- **Precedence.** The effective mode is a `waker mode` override, else `on` inside a window, else the declared mode. An override beats the schedule for as long as it stands, even one set to the declared mode, and `waker reset` hands the app back to the schedule.
+- **A window opens:** the app is woken as if switched to `on`, along with its dependencies. While it lasts there is no idle stop and no eviction.
+- **A window closes:** the app falls back to its declared mode. An `on-demand` app gets one full `idle` from the close, so it stops after `idle` without traffic. An `off` app is stopped.
+- **Timing.** The idle loop wakes at every window boundary. A boundary it slept past (a busy host) is handled at its next wake-up, since it compares the mode with the last one it acted on.
+- **Startup.** A window open when waker starts boots the app at once, like an `on` app.
+- **Status.** `waker status` shows where the app stands:
+
+  ```
+  mode:      on (schedule; declared on-demand, idle 30m0s)
+  schedule:  on until 18:00 (window 0 9 * * 1-5 for 9h)
+  ```
+
+  Outside a window it shows `schedule:  next window Mon 09:00 (…)`. While an override outranks an open window, the line ends `· the override wins`. `--json` has `schedule: {active, until | next, window}`.
 
 ## Heartbeat
 
@@ -90,6 +108,6 @@ memory:    need 900 + headroom(linear p7.5) 1422 = 2322 MiB required to boot (ne
 - **Overrides.** `waker mode` overrides persist in `modes.json`, written atomically (temp file, fsync, rename).
   - A corrupt file is logged and ignored, so the waker starts with the declared modes instead of crash-looping.
   - Overrides for apps no longer configured are dropped.
-  - Setting the declared mode removes the override.
-- **Startup.** `on` apps that aren't healthy are booted. A listener that can't bind (port in use) is skipped and reported by `waker status`; the other apps still run.
+  - Setting the declared mode removes the override, except on an app with a `schedule`: there it pins that mode through windows until `waker reset`.
+- **Startup.** `on` apps that aren't healthy are booted, apps inside a schedule window included. A listener that can't bind (port in use) is skipped and reported by `waker status`; the other apps still run.
 - **Shutdown.** On SIGTERM/SIGINT, waker drains connections for up to 5 s, then stops every app it started, dependents before their dependencies.
