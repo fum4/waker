@@ -98,6 +98,9 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, retried bool) 
 		act.Begin()
 		defer act.End()
 	}
+	if !retried && r.Body != nil && r.Body != http.NoBody {
+		r.Body = &replayableBody{rc: r.Body}
+	}
 	ctx := context.WithValue(r.Context(), retriedKey{}, retried)
 	if h.isPageLoad(r) {
 		ctx = markPageLoad(ctx)
@@ -127,12 +130,18 @@ func (h *Handler) upstreamError(w http.ResponseWriter, r *http.Request, err erro
 		return
 	}
 	st := h.app.Wake(r.Context())
+	if st == app.Starting && h.holds(r) {
+		var ok bool
+		if st, ok = h.hold(w, r); !ok {
+			return
+		}
+	}
 	if st != app.Up {
 		h.page(w, r, http.StatusServiceUnavailable, string(st))
 		return
 	}
-	// A body may already be partly consumed, so only bodiless requests retry.
-	if retried, _ := r.Context().Value(retriedKey{}).(bool); retried || r.ContentLength != 0 {
+	// Forward once more, unless a body was already (partly) sent.
+	if retried, _ := r.Context().Value(retriedKey{}).(bool); retried || !replayable(r) {
 		h.page(w, r, http.StatusBadGateway, pages.Down)
 		return
 	}

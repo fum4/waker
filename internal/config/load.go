@@ -128,6 +128,13 @@ func (a *App) applyDefaults() {
 	if a.BootTimeout == 0 {
 		a.BootTimeout = Duration(DefaultBootTimeout)
 	}
+	if a.Waiting == "" {
+		a.Waiting = DefaultWaiting
+	}
+	if a.HoldTimeout == 0 {
+		// Never past the boot itself: a boot_timeout under a minute caps it.
+		a.HoldTimeout = Duration(min(DefaultHoldTimeout, a.BootTimeout.D()))
+	}
 	if a.StopTimeout == 0 {
 		a.StopTimeout = Duration(DefaultStopTimeout)
 	}

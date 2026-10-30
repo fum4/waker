@@ -53,6 +53,8 @@ defaults:
 | `health.command` | – | Argv instead of `path`; exit 0 means up. |
 | `health.interval` / `health.timeout` | `1s` / `2s` | How often health is polled while booting, and how long one probe may take. |
 | `boot_timeout` | `600s` | A boot that isn't healthy by then fails. A failed boot answers "failed" for 120 s before the next request may retry. |
+| `waiting` | `page` | What a browser gets while the app boots: `page` (the starting page at once) or `hold` (the request waits for the app, like a program's). Programs are always held; see [behaviour.md](behaviour.md#a-request-step-by-step). |
+| `hold_timeout` | `60s` (capped at `boot_timeout`) | How long a held request waits. Then a browser gets the failed page and a program 503 JSON. At most `boot_timeout`. |
 | `mode` | `on-demand` | `on`, `off` or `on-demand`. Quote `"on"` and `"off"`, or YAML may read them as booleans. |
 | `idle` | `30m` | On-demand only: stop after this long without activity. |
 | `idle_ignore` | `[]` | Exact paths (query excluded) that are neither activity nor a reason to wake, e.g. a version poller. |

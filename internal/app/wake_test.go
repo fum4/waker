@@ -97,7 +97,7 @@ func TestACrashingBootIsAFailureNotStuckStarting(t *testing.T) {
 	f := newFixture(t, nil)
 	f.proc.panicked = true
 	f.app.mu.Lock()
-	f.app.booting = true // skip Wake's own probe, which would panic first
+	f.app.claimBootLocked() // skip Wake's own probe, which would panic first
 	f.app.mu.Unlock()
 	f.app.goBackground(func() { f.app.boot(nil) })
 	f.app.Wait()

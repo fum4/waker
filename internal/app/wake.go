@@ -34,7 +34,7 @@ func (a *App) Wake(ctx context.Context) State {
 	}
 	// Claim the boot before asking the gate, which may read other apps:
 	// holding our lock across it could deadlock two apps waking each other.
-	a.booting = true
+	a.claimBootLocked()
 	a.mu.Unlock()
 
 	var makeRoom func() bool
@@ -43,6 +43,7 @@ func (a *App) Wake(ctx context.Context) State {
 		if makeRoom, ok = a.d.Gate.Admit(a); !ok {
 			a.mu.Lock()
 			a.booting, a.busy = false, true
+			close(a.bootDone)
 			a.mu.Unlock()
 			return Busy
 		}
@@ -52,6 +53,29 @@ func (a *App) Wake(ctx context.Context) State {
 	a.mu.Unlock()
 	a.goBackground(func() { a.boot(makeRoom) })
 	return Starting
+}
+
+// claimBootLocked marks a boot running; whoever ends it closes bootDone.
+func (a *App) claimBootLocked() {
+	a.booting = true
+	a.bootDone = make(chan struct{})
+}
+
+// AwaitBoot blocks until the running boot (if any) ends, then returns the
+// app's state. If ctx ends first it returns Starting.
+func (a *App) AwaitBoot(ctx context.Context) State {
+	a.mu.Lock()
+	booting, done := a.booting, a.bootDone
+	a.mu.Unlock()
+	if booting {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return Starting
+		}
+	}
+	// The probe has its own timeout; a deadline about to pass must not fail it.
+	return a.State(context.WithoutCancel(ctx))
 }
 
 // boot runs on its own goroutine: make room, start, wait for health, then
@@ -85,6 +109,7 @@ func (a *App) boot(makeRoom func() bool) {
 	if errMsg != "" {
 		a.bootFailedAt = a.d.Clock.Now()
 	}
+	close(a.bootDone)
 	a.mu.Unlock()
 	a.activity.Touch()
 	a.d.Notify()
