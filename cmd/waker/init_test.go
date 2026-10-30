@@ -23,7 +23,7 @@ func typing(t *testing.T, in string) {
 func TestInitYes(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "shop")
 	path := filepath.Join(dir, "waker.yaml")
-	code, stdout, stderr := runCLI("init", "--yes", "--config", path, "--start", "npm run start", "--port", "20080", "--upstream-port", "20081", "--idle", "10m")
+	code, stdout, stderr := runCLI("init", "--yes", "--config", path, "--start", "npm run start", "--listen", "127.0.0.1:20080", "--upstream-port", "20081", "--idle", "10m")
 	if code != 0 {
 		t.Fatalf("= %d\n%s%s", code, stdout, stderr)
 	}
@@ -68,7 +68,8 @@ func TestInitRefusals(t *testing.T) {
 	}{
 		{[]string{"init", "--config", path}, "not a terminal"}, // no TTY in tests
 		{[]string{"init", "--yes", "--config", path}, "start: the command that starts the app is required"},
-		{[]string{"init", "--yes", "--config", path, "--start", "x", "--port", "3000"}, "can't both listen on 3000"},
+		{[]string{"init", "--yes", "--config", path, "--start", "x", "--listen", "0.0.0.0:3000"}, "can't both listen on 3000"},
+		{[]string{"init", "--yes", "--config", path, "--start", "x", "--listen", "8080"}, "is not host:port"},
 		{[]string{"init", "--yes", "--config", path, "--start", "echo 'oops"}, "unclosed"},
 		{[]string{"init", "--yes", "--config", path, "--start", "x", "--name", "No Spaces"}, "name:"},
 	}
@@ -85,16 +86,16 @@ func TestInitRefusals(t *testing.T) {
 func TestInitInteractive(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "notes")
 	path := filepath.Join(dir, "waker.yaml")
-	// name: default · public port: bad, then 20090 · app port: taken, then
+	// name: default · listen: bad, then 0.0.0.0:20090 · app port: taken, then
 	// 20091 · start · health: default · idle: 5m · install: no.
-	typing(t, "\nabc\n20090\n20090\n20091\npython3 -m http.server 20091\n\n5m\nn\n")
+	typing(t, "\nabc\n0.0.0.0:20090\n20090\n20091\npython3 -m http.server 20091\n\n5m\nn\n")
 	code, stdout, stderr := runCLI("init", "--config", path)
 	if code != 0 {
 		t.Fatalf("= %d\n%s%s", code, stdout, stderr)
 	}
 	for _, want := range []string{
-		"◆ waker init", "❯ App name (notes)", `✖ "abc" is not a port`, "✖ waker already answers on that port",
-		"✔ wrote " + path, "✔ waker check: ok", "notes  127.0.0.1:20090 → http://127.0.0.1:20091 · on-demand · sleeps after 5m",
+		"◆ waker init", "❯ App name (notes)", `✖ "abc" is not host:port`, "✖ waker already answers on that port",
+		"✔ wrote " + path, "✔ waker check: ok", "notes  0.0.0.0:20090 → http://127.0.0.1:20091 · open to other machines · on-demand · sleeps after 5m",
 		"❯ Install as a service now? [Y/n]", "later: waker service install --config ",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -105,7 +106,7 @@ func TestInitInteractive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a := cfg.Apps[0]; a.Name != "notes" || a.Listen != "127.0.0.1:20090" || a.Upstream != "http://127.0.0.1:20091" || a.Idle.String() != "5m0s" {
+	if a := cfg.Apps[0]; a.Name != "notes" || a.Listen != "0.0.0.0:20090" || a.Upstream != "http://127.0.0.1:20091" || a.Idle.String() != "5m0s" {
 		t.Errorf("app = %+v", a)
 	}
 	if calls := ran.take(); len(calls) != 0 {
@@ -133,7 +134,7 @@ func TestInitInteractiveInstalls(t *testing.T) {
 }
 
 func TestInitCtrlDExits130(t *testing.T) {
-	typing(t, "blog\n") // then EOF at the port question
+	typing(t, "blog\n") // then EOF at the listen question
 	path := filepath.Join(t.TempDir(), "waker.yaml")
 	if code, _, _ := runCLI("init", "--config", path); code != 130 {
 		t.Fatalf("= %d, want 130", code)

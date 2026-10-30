@@ -15,7 +15,7 @@ var update = flag.Bool("update", false, "rewrite testdata/*.golden")
 
 func sample() Answers {
 	return Answers{
-		Name: "blog", Port: 8080, UpstreamPort: 3000,
+		Name: "blog", Listen: DefaultListen, UpstreamPort: 3000,
 		Start:      []string{"python3", "-m", "http.server", "3000", "--bind", "127.0.0.1"},
 		HealthPath: "/", Idle: "30m",
 	}
@@ -43,7 +43,7 @@ func TestRenderGolden(t *testing.T) {
 func TestRenderRoundTrips(t *testing.T) {
 	odd := []string{"node", "server.js", "--port=3000", "on", "yes", "-", "-1", "@scope/pkg", "%x", "a b", `say "hi"`, "#tag", "x:", "ünï", "~", ""}
 	a := sample()
-	a.Name, a.Start, a.HealthPath, a.Idle = "my-app-2", odd, "/healthz?full=1", "1h30m"
+	a.Name, a.Listen, a.Start, a.HealthPath, a.Idle = "my-app-2", "127.0.0.1:8080", odd, "/healthz?full=1", "1h30m"
 	cfg, err := config.Parse(a.Render())
 	if err != nil {
 		t.Fatalf("Parse: %v\n%s", err, a.Render())
@@ -85,7 +85,7 @@ func TestValidate(t *testing.T) {
 	if err := sample().Validate(); err != nil {
 		t.Fatal(err)
 	}
-	bad := Answers{Name: "Bad Name", Port: 3000, UpstreamPort: 3000, HealthPath: "health", Idle: "soon"}
+	bad := Answers{Name: "Bad Name", Listen: "0.0.0.0:3000", UpstreamPort: 3000, HealthPath: "health", Idle: "soon"}
 	err := bad.Validate()
 	for _, want := range []string{"name:", "can't both listen on 3000", "start:", "health path:", "idle:"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
@@ -117,5 +117,24 @@ func TestSplitArgs(t *testing.T) {
 		if _, err := SplitArgs(bad); err == nil {
 			t.Errorf("SplitArgs(%q) = nil error", bad)
 		}
+	}
+}
+
+func TestListen(t *testing.T) {
+	for s, loop := range map[string]bool{"127.0.0.1:8080": true, "localhost:80": true, "[::1]:80": true, "0.0.0.0:8080": false, "[::]:80": false, "192.168.1.5:80": false} {
+		if _, err := ParseListen(s); err != nil {
+			t.Errorf("ParseListen(%q) = %v", s, err)
+		}
+		if Loopback(s) != loop {
+			t.Errorf("Loopback(%q) = %v", s, !loop)
+		}
+	}
+	for _, bad := range []string{"8080", ":8080", "example.com:80", "0.0.0.0:0", "0.0.0.0:99999", "0.0.0.0:http"} {
+		if _, err := ParseListen(bad); err == nil {
+			t.Errorf("ParseListen(%q) = nil error", bad)
+		}
+	}
+	if !strings.Contains(string(Answers{Name: "x", Listen: "127.0.0.1:8080", UpstreamPort: 3000, Start: []string{"x"}, HealthPath: "/", Idle: "1m"}.Render()), "# this machine only") {
+		t.Error("a loopback listen should say so")
 	}
 }

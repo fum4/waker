@@ -242,7 +242,7 @@ From source: `go install github.com/fum4/waker/cmd/waker@latest`.
 On a terminal, `waker init` prompts, with a default for every answer except the start command. It writes the file, runs `waker check` on it, then offers to install the service. Without a terminal (an agent, CI, `curl | sh`) it needs `--yes`, and takes the answers as flags:
 
 ```sh
-waker init --yes --start 'npm run start' --name shop --port 8080 --upstream-port 3000 --health /healthz --idle 15m
+waker init --yes --start 'npm run start' --name shop --listen 0.0.0.0:8080 --upstream-port 3000 --health /healthz --idle 15m
 waker setup --yes --start 'npm run start'   # the same, then waker service install
 ```
 

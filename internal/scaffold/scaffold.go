@@ -6,6 +6,7 @@ package scaffold
 import (
 	"errors"
 	"fmt"
+	"net"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -17,8 +18,10 @@ import (
 
 // Answers are the questions `waker init` asks, one app's worth.
 type Answers struct {
-	Name         string
-	Port         int // waker's public port, on 127.0.0.1
+	Name string
+	// Listen is waker's host:port: 0.0.0.0 reaches visitors on other
+	// machines, 127.0.0.1 only a proxy on this one.
+	Listen       string
 	UpstreamPort int // the app's own port, on 127.0.0.1
 	Start        []string
 	HealthPath   string
@@ -28,7 +31,7 @@ type Answers struct {
 // Defaults for every answer but Start, which has none. Idle is the
 // built-in default, written out so the owner sees the knob.
 const (
-	DefaultPort         = 8080
+	DefaultListen       = "0.0.0.0:8080"
 	DefaultUpstreamPort = 3000
 	DefaultHealthPath   = config.DefaultHealthPath
 )
@@ -57,6 +60,16 @@ func ValidateName(s string) error {
 		return errors.New("lowercase letters, digits and dashes, starting with a letter or digit")
 	}
 	return nil
+}
+
+// ParseListen checks a host:port (an IP address, or localhost) and
+// returns the port.
+func ParseListen(s string) (int, error) {
+	host, port, err := net.SplitHostPort(s)
+	if err != nil || (host != "localhost" && net.ParseIP(host) == nil) {
+		return 0, fmt.Errorf("%q is not host:port, e.g. 0.0.0.0:8080 or 127.0.0.1:8080", s)
+	}
+	return ParsePort(port)
 }
 
 // ParsePort reads a TCP port, 1–65535.
@@ -90,16 +103,15 @@ func (a Answers) Validate() error {
 	if err := ValidateName(a.Name); err != nil {
 		errs = append(errs, fmt.Errorf("name: %w", err))
 	}
-	for _, p := range []struct {
-		key string
-		n   int
-	}{{"port", a.Port}, {"upstream port", a.UpstreamPort}} {
-		if p.n < 1 || p.n > 65535 {
-			errs = append(errs, fmt.Errorf("%s: %d is not a port (1–65535)", p.key, p.n))
-		}
+	port, err := ParseListen(a.Listen)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("listen: %w", err))
 	}
-	if a.Port == a.UpstreamPort {
-		errs = append(errs, fmt.Errorf("port: waker and the app can't both listen on %d", a.Port))
+	if a.UpstreamPort < 1 || a.UpstreamPort > 65535 {
+		errs = append(errs, fmt.Errorf("upstream port: %d is not a port (1–65535)", a.UpstreamPort))
+	}
+	if err == nil && port == a.UpstreamPort {
+		errs = append(errs, fmt.Errorf("upstream port: waker and the app can't both listen on %d", port))
 	}
 	if len(a.Start) == 0 {
 		errs = append(errs, errors.New("start: the command that starts the app is required"))

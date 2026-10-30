@@ -83,3 +83,17 @@ func TestColourRedrawsTheAnsweredLine(t *testing.T) {
 		t.Errorf("no ✔ redraw: %q", s)
 	}
 }
+
+func TestAlignLabels(t *testing.T) {
+	var out bytes.Buffer
+	p := New(strings.NewReader("a\nb\n"), &out, true)
+	p.AlignLabels("Name", "Start command")
+	for _, l := range []string{"Name", "Start command"} {
+		if _, err := p.Ask(Question{Label: l}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !strings.Contains(out.String(), dim+"Name         "+reset) || !strings.Contains(out.String(), dim+"Start command"+reset) {
+		t.Errorf("labels not padded to one width: %q", out.String())
+	}
+}

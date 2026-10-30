@@ -9,6 +9,7 @@ import (
 
 	"github.com/fum4/waker/internal/config"
 	"github.com/fum4/waker/internal/prompt"
+	"github.com/fum4/waker/internal/scaffold"
 )
 
 // report says which config init or setup is using (verb: "wrote" or
@@ -27,7 +28,7 @@ func report(p *prompt.Prompter, verb, path string, stdout, stderr io.Writer) err
 	p.Done(verb + " " + displayPath(path))
 	p.Done("waker check: ok")
 	for _, a := range cfg.Apps {
-		p.Note(fmt.Sprintf("%s  %s → %s · %s · sleeps after %s", a.Name, a.Listen, a.Upstream, a.Mode, shortDuration(a.Idle)))
+		p.Note(fmt.Sprintf("%s  %s → %s · %s · %s · sleeps after %s", a.Name, a.Listen, a.Upstream, reach(a.Listen), a.Mode, shortDuration(a.Idle)))
 	}
 	warnings, source, err := servicePATHWarnings(cfg, path)
 	for _, w := range warnings {
@@ -60,4 +61,12 @@ func shortDuration(d config.Duration) string {
 		s = strings.TrimSuffix(s, "0m")
 	}
 	return s
+}
+
+// reach says who can open the app through waker.
+func reach(listen string) string {
+	if scaffold.Loopback(listen) {
+		return "this machine only"
+	}
+	return "open to other machines"
 }

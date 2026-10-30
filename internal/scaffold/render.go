@@ -3,6 +3,7 @@ package scaffold
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,7 +25,7 @@ func (a Answers) Render() []byte {
 	b.WriteString("apps:\n")
 	writeBlock(&b, "  - ", "    ", []line{
 		{"name", scalar(a.Name), ""},
-		{"listen", scalar(fmt.Sprintf("127.0.0.1:%d", a.Port)), "waker answers here; point your proxy at it"},
+		{"listen", scalar(a.Listen), listenComment(a.Listen)},
 		{"upstream", scalar(fmt.Sprintf("http://127.0.0.1:%d", a.UpstreamPort)), "where the app itself serves"},
 		{"start", flowSeq(a.Start), ""},
 		{"idle", scalar(a.Idle), "stop after this long without a request"},
@@ -99,4 +100,22 @@ func flowSeq(argv []string) string {
 		q[i] = scalar(a)
 	}
 	return "[" + strings.Join(q, ", ") + "]"
+}
+
+// Loopback reports whether a listen address only serves this machine.
+func Loopback(listen string) bool {
+	host, _, err := net.SplitHostPort(listen)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return host == "localhost" || ip != nil && ip.IsLoopback()
+}
+
+// listenComment says who can reach the address, and how to change that.
+func listenComment(listen string) string {
+	if Loopback(listen) {
+		return "this machine only: point your proxy at it"
+	}
+	return "open to other machines; 127.0.0.1 behind a proxy"
 }

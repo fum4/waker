@@ -23,16 +23,16 @@ var (
 
 // initFlags are the answers as flags, shared by init and setup.
 type initFlags struct {
-	config, name, start, health, idle string
-	port, upstreamPort                int
-	yes, force                        bool
+	config, name, listen, start, health, idle string
+	upstreamPort                              int
+	yes, force                                bool
 }
 
 func addInitFlags(fs *flag.FlagSet) *initFlags {
 	f := &initFlags{}
 	fs.StringVar(&f.config, "config", "", "file to write (default $WAKER_CONFIG, else ./waker.yaml)")
 	fs.StringVar(&f.name, "name", "", "app name (default: the config directory's name)")
-	fs.IntVar(&f.port, "port", scaffold.DefaultPort, "waker's public port, on 127.0.0.1")
+	fs.StringVar(&f.listen, "listen", scaffold.DefaultListen, "waker's host:port: 0.0.0.0 for other machines, 127.0.0.1 behind a proxy")
 	fs.IntVar(&f.upstreamPort, "upstream-port", scaffold.DefaultUpstreamPort, "the app's own port, on 127.0.0.1")
 	fs.StringVar(&f.start, "start", "", "the command that starts the app, e.g. 'npm run start' (required with --yes)")
 	fs.StringVar(&f.health, "health", scaffold.DefaultHealthPath, "health check path")
@@ -99,7 +99,9 @@ func (f *initFlags) prompter(stdout io.Writer) (*prompt.Prompter, error) {
 	if !interactive() {
 		return nil, fmt.Errorf("%w: not a terminal, so nothing to prompt: pass --yes and the answers as flags (--start is required)", errUsage)
 	}
-	return prompt.New(stdin, stdout, prompt.ColorWanted()), nil
+	p := prompt.New(stdin, stdout, prompt.ColorWanted())
+	p.AlignLabels(initLabels...)
+	return p, nil
 }
 
 // writeConfig collects the answers (prompting when p is set), writes the
@@ -154,7 +156,7 @@ func (f *initFlags) answers(path string) (scaffold.Answers, error) {
 		return scaffold.Answers{}, fmt.Errorf("%w: --start: %v", errUsage, err)
 	}
 	a := scaffold.Answers{
-		Name: f.name, Port: f.port, UpstreamPort: f.upstreamPort,
+		Name: f.name, Listen: f.listen, UpstreamPort: f.upstreamPort,
 		Start: start, HealthPath: f.health, Idle: f.idle,
 	}
 	if a.Name == "" {

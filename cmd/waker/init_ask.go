@@ -24,6 +24,10 @@ func askPath(p *prompt.Prompter, def string) (string, error) {
 	return filepath.Abs(ans)
 }
 
+// initLabels are every question init and setup ask, so the answered
+// values line up in one column.
+var initLabels = []string{"Config file", "App name", "Listen on", "App port", "Start command", "Health path", "Sleep after"}
+
 // ask collects the answers, the flags' values offered as defaults.
 func ask(p *prompt.Prompter, f *initFlags, path string) (scaffold.Answers, error) {
 	var a scaffold.Answers
@@ -35,10 +39,14 @@ func ask(p *prompt.Prompter, f *initFlags, path string) (scaffold.Answers, error
 	if a.Name, err = p.Ask(prompt.Question{Label: "App name", Default: name, Validate: scaffold.ValidateName}); err != nil {
 		return a, err
 	}
-	if a.Port, err = askPort(p, "Public port", "waker answers here", f.port, 0); err != nil {
+	if a.Listen, err = p.Ask(prompt.Question{
+		Label: "Listen on", Hint: "127.0.0.1:… if Caddy/nginx sits in front", Default: f.listen,
+		Validate: func(s string) error { _, err := scaffold.ParseListen(s); return err },
+	}); err != nil {
 		return a, err
 	}
-	if a.UpstreamPort, err = askPort(p, "App port", "where the app itself listens", f.upstreamPort, a.Port); err != nil {
+	port, _ := scaffold.ParseListen(a.Listen)
+	if a.UpstreamPort, err = askPort(p, "App port", "where the app itself listens", f.upstreamPort, port); err != nil {
 		return a, err
 	}
 	start, err := p.Ask(prompt.Question{

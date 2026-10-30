@@ -35,6 +35,8 @@ type Prompter struct {
 	in    *bufio.Reader
 	out   io.Writer
 	color bool
+	// labelWidth pads answered labels so their values share a column.
+	labelWidth int
 }
 
 // New returns a prompter; color adds ANSI styles and redraws answered
@@ -140,10 +142,6 @@ func (p *Prompter) Confirm(label string, def bool) (bool, error) {
 	}
 }
 
-// labelWidth lines answered values up in a column (the longest question
-// label init asks, "Start command").
-const labelWidth = 13
-
 // answered redraws the question as one ✔ line (in colour), clearing its
 // lines on screen: the prompt, plus a rejected answer and its ✖ for each
 // retry.
@@ -151,7 +149,7 @@ func (p *Prompter) answered(lines int, label, ans string) {
 	if !p.color {
 		return
 	}
-	fmt.Fprintf(p.out, "%s  %s %s %s\n", strings.Repeat(up, lines), p.style("✔", green), p.style(fmt.Sprintf("%-*s", labelWidth, label), dim), p.style(ans, cyan))
+	fmt.Fprintf(p.out, "%s  %s %s %s\n", strings.Repeat(up, lines), p.style("✔", green), p.style(fmt.Sprintf("%-*s", p.labelWidth, label), dim), p.style(ans, cyan))
 }
 
 // Warn prints a ⚠ line.
@@ -173,4 +171,12 @@ func (p *Prompter) readLine() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(s), nil
+}
+
+// AlignLabels pads every answered label to the longest of labels, so the
+// values line up in one column.
+func (p *Prompter) AlignLabels(labels ...string) {
+	for _, l := range labels {
+		p.labelWidth = max(p.labelWidth, len([]rune(l)))
+	}
 }

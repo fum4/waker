@@ -4,7 +4,7 @@
 
 apps:
   - name:     blog
-    listen:   127.0.0.1:8080         # waker answers here; point your proxy at it
+    listen:   0.0.0.0:8080           # open to other machines; 127.0.0.1 behind a proxy
     upstream: http://127.0.0.1:3000  # where the app itself serves
     start:    [python3, -m, http.server, "3000", --bind, 127.0.0.1]
     idle:     30m                    # stop after this long without a request
