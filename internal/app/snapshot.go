@@ -27,14 +27,19 @@ type Snapshot struct {
 	Inflight      int              `json:"inflight"`
 	IdleIn        *config.Duration `json:"idle_in,omitempty"`
 	Evicted       *Eviction        `json:"evicted"`
+	DependsOn     []string         `json:"depends_on,omitempty"`
+	// KeptUpBy names the dependents keeping this app up (no idle stop, no
+	// eviction).
+	KeptUpBy []string `json:"kept_up_by,omitempty"`
 	// Memory is filled in by the daemon, which owns the budget.
 	Memory *memory.Breakdown `json:"memory,omitempty"`
 }
 
 // Snapshot probes health and returns the app's status. IdleIn is set only
-// for an on-demand app that is up.
+// for an on-demand app that is up and not kept up by a dependent.
 func (a *App) Snapshot(ctx context.Context) Snapshot {
 	st := a.State(ctx)
+	keptUpBy := a.KeptUpBy()
 	a.mu.Lock()
 	s := Snapshot{
 		Name:         a.cfg.Name,
@@ -49,6 +54,8 @@ func (a *App) Snapshot(ctx context.Context) Snapshot {
 		Priority:     a.cfg.Priority,
 		Heartbeat:    a.cfg.HeartbeatEnabled(),
 		Evicted:      a.evicted,
+		DependsOn:    a.cfg.DependsOn,
+		KeptUpBy:     keptUpBy,
 	}
 	if a.override != nil {
 		since := a.override.Since
@@ -57,7 +64,7 @@ func (a *App) Snapshot(ctx context.Context) Snapshot {
 	a.mu.Unlock()
 	s.LastActivity = a.activity.LastActivity()
 	s.Inflight = a.activity.Inflight()
-	if s.Mode == config.ModeOnDemand && st == Up {
+	if s.Mode == config.ModeOnDemand && st == Up && len(keptUpBy) == 0 {
 		left := config.Duration(max(0, a.activity.IdleIn(s.Idle.D())))
 		s.IdleIn = &left
 	}

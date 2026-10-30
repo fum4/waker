@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/fum4/waker/internal/config"
 )
@@ -35,6 +36,14 @@ func (a *App) Wake(ctx context.Context) State {
 	// Claim the boot before asking the gate, which may read other apps:
 	// holding our lock across it could deadlock two apps waking each other.
 	a.claimBootLocked()
+	if len(a.deps) > 0 {
+		// Admitted only once its dependencies are up: a reservation taken now
+		// would count against their own boots.
+		a.bootErr, a.bootFailedAt, a.busy = "", timeZero, false
+		a.mu.Unlock()
+		a.goBackground(a.bootAfterDeps)
+		return Starting
+	}
 	a.mu.Unlock()
 
 	var makeRoom func() bool
@@ -51,7 +60,8 @@ func (a *App) Wake(ctx context.Context) State {
 	a.mu.Lock()
 	a.bootErr, a.bootFailedAt, a.busy = "", timeZero, false
 	a.mu.Unlock()
-	a.goBackground(func() { a.boot(makeRoom) })
+	deadline := a.d.Clock.Now().Add(a.cfg.BootTimeout.D())
+	a.goBackground(func() { a.boot(makeRoom, deadline) })
 	return Starting
 }
 
@@ -78,9 +88,9 @@ func (a *App) AwaitBoot(ctx context.Context) State {
 	return a.State(context.WithoutCancel(ctx))
 }
 
-// boot runs on its own goroutine: make room, start, wait for health, then
-// settle the state. A mode switched to off meanwhile wins with a final stop.
-func (a *App) boot(makeRoom func() bool) {
+// boot runs on its own goroutine: make room, start, wait for health until
+// deadline, then settle the state.
+func (a *App) boot(makeRoom func() bool, deadline time.Time) {
 	if a.d.Gate != nil {
 		defer a.d.Gate.Release(a)
 	}
@@ -95,8 +105,14 @@ func (a *App) boot(makeRoom func() bool) {
 			busy = true
 			return
 		}
-		errMsg = a.start()
+		errMsg = a.start(deadline)
 	}()
+	a.settle(busy, errMsg)
+}
+
+// settle ends the claimed boot: it records the outcome and closes bootDone.
+// A mode switched to off meanwhile wins with a final stop.
+func (a *App) settle(busy bool, errMsg string) {
 	modeOff := a.Mode() == config.ModeOff
 	if modeOff {
 		errMsg = "" // the mode-off stop killed the start; that is not a failure
@@ -128,8 +144,9 @@ func (a *App) boot(makeRoom func() bool) {
 }
 
 // start launches the app and polls health until it answers, the start
-// command fails, or boot_timeout passes. It returns an error message or "".
-func (a *App) start() string {
+// command fails, or deadline (boot_timeout from the boot's start) passes. It
+// returns an error message or "".
+func (a *App) start(deadline time.Time) string {
 	a.life.Lock()
 	exit, err := a.d.Process.Start()
 	a.life.Unlock()
@@ -137,7 +154,6 @@ func (a *App) start() string {
 		return err.Error()
 	}
 	ctx := context.Background()
-	deadline := a.d.Clock.Now().Add(a.cfg.BootTimeout.D())
 	for {
 		if a.Healthy(ctx) {
 			return ""

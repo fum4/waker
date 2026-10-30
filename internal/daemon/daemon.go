@@ -35,7 +35,9 @@ type Daemon struct {
 	pages map[string]*pages.Pages // per app: each has its own branding and page files
 	sig   idle.Signal
 	all   []*app.App
-	procs map[string]*boot.Process
+	// stopOrder is every app, dependents before their dependencies.
+	stopOrder []*app.App
+	procs     map[string]*boot.Process
 
 	avail   memory.Available
 	budget  *memory.Budget
@@ -78,6 +80,7 @@ func New(cfg *config.Config, log *slog.Logger) (*Daemon, error) {
 			Log:     log,
 		}, o))
 	}
+	d.stopOrder = wireDependencies(d.all)
 	return d, nil
 }
 
@@ -110,7 +113,8 @@ func (d *Daemon) Run(ctx context.Context) error {
 	for _, s := range servers {
 		_ = s.Shutdown(shutdown)
 	}
-	for _, a := range d.listening {
+	// A dependent may still need its dependencies while it stops.
+	for _, a := range d.stopOrder {
 		a.Wait()
 		if a.Started() {
 			a.Stop("waker shutting down")
@@ -146,7 +150,7 @@ func (d *Daemon) listen() []*http.Server {
 // step stops whatever is due and returns the time to the next deadline.
 func (d *Daemon) step() time.Duration {
 	next := idle.MaxSleep
-	for _, a := range d.listening {
+	for _, a := range d.ticked() {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {

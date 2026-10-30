@@ -106,7 +106,8 @@ func (g *Gate) Plan(booting *app.App, shortfall int64) []*app.App {
 
 // Evictable reports whether v may be stopped for booting: v was started by
 // this waker, is on-demand, up, idle (nothing in flight), not booting, not
-// protected, and its priority is below (or, by policy, equal to) booting's.
+// protected, not kept up by a dependent, and its priority is below (or, by
+// policy, equal to) booting's.
 func (g *Gate) Evictable(v, booting *app.App) bool {
 	if v == booting || !g.Policy.Enabled || !v.Config().IsEvictable() || slices.Contains(g.Policy.Protect, v.Name()) {
 		return false
@@ -124,7 +125,7 @@ func (g *Gate) Evictable(v, booting *app.App) bool {
 		return false
 	}
 	return v.Started() && v.Mode() == config.ModeOnDemand && !v.Booting() &&
-		v.Activity().Inflight() == 0 && v.Healthy(context.Background())
+		v.Activity().Inflight() == 0 && len(v.KeptUpBy()) == 0 && v.Healthy(context.Background())
 }
 
 func (g *Gate) compare(a, b *app.App) int {
