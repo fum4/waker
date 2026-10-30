@@ -36,7 +36,7 @@ defaults:
 
 - **Scalars** (`idle`, `mode`, `priority`, …): the app's value wins.
 - **Maps** (`health`, `branding`, `env`, `pages`) merge per key: an app with `branding: {accent: "#f36"}` keeps the default `name` and `logo`. In `health`, `path` and `command` are one choice: an app that sets either inherits neither. In `pages`, `bare` and a map don't merge: the app's value wins whole.
-- **Lists** (`idle_ignore`): the app's list replaces the default one; `[]` clears it.
+- **Lists** (`idle_ignore`, `depends_on`): the app's list replaces the default one; `[]` clears it.
 
 ## `apps[]`
 
@@ -66,6 +66,7 @@ defaults:
 | `evictable` | `true` | `false` means this app is never evicted. |
 | `branding` | see below | The look of this app's visitor pages; usually set once in `defaults`. |
 | `pages` | built-in | Your own HTML file per visitor page, or `bare` for status and headers only; see below. |
+| `depends_on` | `[]` | Apps woken before this one and kept up while it is; see below. |
 
 ## `resources`
 
@@ -102,7 +103,7 @@ resources:
 
 **Eviction**, when memory is short:
 
-1. waker picks candidates: apps it started that are `on-demand`, up, with nothing in flight, not protected, and of a lower priority (or equal, under `lower-or-equal`).
+1. waker picks candidates: apps it started that are `on-demand`, up, with nothing in flight, not protected, not kept up by a [dependent](#depends_on-per-app-or-in-defaults), and of a lower priority (or equal, under `lower-or-equal`).
 2. If stopping all of them couldn't cover the shortfall, nothing is stopped and the visitor sees "busy".
 3. Otherwise it stops them one at a time in the configured order, re-measuring after each, and boots as soon as there's room.
 
@@ -147,3 +148,21 @@ Three placeholders are replaced, HTML-escaped; nothing else in the file is touch
 **The starting page opens the app by itself:** waker inserts `<script src="/__waker/wait.js" defer></script>` before its last `</body>` (or at the end), unless the file already loads `/__waker/wait.js`. When the boot fails or is refused, the script reloads once, so the visitor gets that state's page. Other pages get no script.
 
 **`pages: bare`** drops every page and JSON body for the app: visitors get the status code and headers alone (`Content-Length: 0`, `Cache-Control: no-store`, `X-Robots-Tag: noindex`, `Retry-After` on 503). `/__waker/*` still answers. Use it when something in front of waker renders its own error pages.
+
+## `depends_on` (per app, or in `defaults`)
+
+The apps this one needs, by name:
+
+```yaml
+apps:
+  - name: api
+    depends_on: [db, cache]
+```
+
+Waking `api` wakes `db` and `cache` first, and they stay up while `api` is; see [behaviour.md § Dependencies](behaviour.md#dependencies). Any configured app may be named, listening or not. `waker check` rejects, naming the key:
+
+- an unknown app (`apps[0] (api).depends_on[1]: "ghost" is not a configured app`);
+- the app itself, or a name listed twice;
+- a cycle, reported once (`apps[0] (api).depends_on: cycle api → db → api`).
+
+Set in `defaults`, the list applies to every app, the named ones included: give each of those its own `depends_on: []`, or `waker check` reports `defaults.depends_on[0]: db depends on itself`.
