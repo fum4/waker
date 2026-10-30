@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -103,6 +104,49 @@ func TestValidateReportsEveryProblem(t *testing.T) {
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), ".priority") || !strings.Contains(err.Error(), ".mode") {
 		t.Fatalf("want both problems, got %v", err)
+	}
+}
+
+func TestValidateContact(t *testing.T) {
+	tests := []struct {
+		contact string
+		ok      bool
+	}{
+		{"hello@example.com", true},
+		{"a.b+c_d%e-f@mail.example.co.uk", true},
+		{"https://example.com", true},
+		{"https://example.com/help?topic=apps&lang=en#top", true},
+		{"http://example.com", false},
+		{"HTTPS://example.com", false},
+		{"https://", false},
+		{"https:///path", false},
+		{"https://user:pw@example.com", false},
+		{"https://example.com/<script>", false},
+		{`https://example.com/"x"`, false},
+		{"https://example.com/a b", false},
+		{"mailto:hello@example.com", false},
+		{"Hello <hello@example.com>", false},
+		{`"a"@example.com`, false},
+		{"a@b@example.com", false},
+		{"a&b@example.com", false},
+		{"hello@example", false},
+		{"hello @example.com", false},
+		{"example.com", false},
+		{"call us", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.contact, func(t *testing.T) {
+			cfg := validConfig()
+			cfg.Apps[0].Branding.Contact = tt.contact
+			err := cfg.Validate()
+			if tt.ok != (err == nil) {
+				t.Fatalf("Validate(%q) = %v", tt.contact, err)
+			}
+			want := fmt.Sprintf("apps[0] (web).branding.contact: %q is not an email address or an https:// URL", tt.contact)
+			if !tt.ok && !strings.Contains(err.Error(), want) {
+				t.Fatalf("err = %v, want %q", err, want)
+			}
+		})
 	}
 }
 

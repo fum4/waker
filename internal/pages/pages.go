@@ -30,19 +30,6 @@ const (
 	Down     = "down"
 )
 
-// copyText is each page's title and line. Visitor copy never names the
-// waker or calls the app a demo.
-var copyText = map[string][2]string{
-	Starting: {"Starting the servers", "This takes a moment — the app will open by itself."},
-	Offline:  {"This app is offline", "It isn't running right now."},
-	Busy:     {"The server is busy", "It can't start the app right now. Try again in a few minutes."},
-	Failed:   {"Couldn't start the app", "Something went wrong while starting it. Try again in a moment."},
-	Down:     {"This app isn't running", "Try again in a few minutes."},
-}
-
-// startingEnds are the states the starting page swaps to without a reload.
-var startingEnds = []string{Failed, Busy}
-
 // Pages renders one app's pages, with its branding and page files.
 type Pages struct {
 	tmpl     *template.Template
@@ -53,6 +40,7 @@ type Pages struct {
 	logo     []byte
 	logoType string
 	bare     bool
+	contact  *contact          // branding.contact as a link; nil when unset
 	custom   map[string][]byte // page → the owner's file, rendered once
 }
 
@@ -69,11 +57,11 @@ func New(a config.App) (*Pages, error) {
 	}
 	b := a.Branding
 	p := &Pages{tmpl: tmpl, style: template.CSS(css), accent: DefaultAccent, brand: b.Name, name: a.Name,
-		logoType: "image/svg+xml", bare: a.Pages.Bare}
+		logoType: "image/svg+xml", bare: a.Pages.Bare, contact: newContact(b.Contact)}
 	if b.Accent != "" {
 		p.accent = template.CSS(b.Accent) // validated by config as #rgb / #rrggbb
 	}
-	if p.custom, err = loadCustom(a.Pages.Files, a.Name, string(p.accent)); err != nil {
+	if p.custom, err = loadCustom(a.Pages.Files, a.Name, string(p.accent), b.Contact); err != nil {
 		return nil, err
 	}
 	if b.Logo == "" {
@@ -109,13 +97,13 @@ func (p *Pages) Render(page string) ([]byte, error) {
 		return nil, fmt.Errorf("no page %q", page)
 	}
 	data := map[string]any{
-		"Page": page, "Title": c[0], "Text": c[1], "Name": p.name,
+		"Page": page, "Title": c.Title, "Line": lineFor(c, p.contact), "Name": p.name,
 		"Brand": p.brand, "Style": p.style, "Accent": p.accent,
 	}
 	if page == Starting {
-		ends := map[string][2]string{}
+		var ends []end
 		for _, e := range startingEnds {
-			ends[e] = copyText[e]
+			ends = append(ends, end{Page: e, Title: copyText[e].Title, Line: lineFor(copyText[e], p.contact)})
 		}
 		data["Ends"] = ends
 		data["Wait"] = template.HTML(WaitTag)

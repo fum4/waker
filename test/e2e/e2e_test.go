@@ -159,7 +159,7 @@ func (h *harness) eventually(what string, limit time.Duration, cond func() bool)
 func (h *harness) wakeToUp() {
 	h.t.Helper()
 	code, body := h.get("/")
-	if code != 503 || !strings.Contains(body, "Starting the servers") || !strings.Contains(body, "--sig:#ff3366") {
+	if code != 503 || !strings.Contains(body, "Powering up the servers") || !strings.Contains(body, "--sig:#ff3366") {
 		h.t.Fatalf("first visit = %d %q", code, body)
 	}
 	h.eventually("the app serves", 10*time.Second, func() bool { code, body := h.get("/page"); return code == 200 && body == "app:/page" })

@@ -19,20 +19,22 @@ const LogoURL = "/__waker/logo"
 // The placeholders an owner's page may use. Only these are replaced: the
 // file is never executed as a template.
 const (
-	PlaceholderName   = "{{name}}"
-	PlaceholderLogo   = "{{logo}}"
-	PlaceholderAccent = "{{accent}}"
+	PlaceholderName    = "{{name}}"
+	PlaceholderLogo    = "{{logo}}"
+	PlaceholderAccent  = "{{accent}}"
+	PlaceholderContact = "{{contact}}" // branding.contact as written; empty when unset
 )
 
 var bodyClose = regexp.MustCompile(`(?i)</body\s*>`)
 
 // loadCustom reads the owner's page files and fills their placeholders; the
 // starting page also gets the wait script, unless it loads it itself.
-func loadCustom(files map[string]string, name, accent string) (map[string][]byte, error) {
+func loadCustom(files map[string]string, name, accent, contact string) (map[string][]byte, error) {
 	fill := strings.NewReplacer(
 		PlaceholderName, html.EscapeString(name),
 		PlaceholderLogo, html.EscapeString(LogoURL),
 		PlaceholderAccent, html.EscapeString(accent),
+		PlaceholderContact, html.EscapeString(contact),
 	)
 	out := map[string][]byte{}
 	for page, path := range files {

@@ -86,6 +86,7 @@ apps:
       logo: ./logo.svg              # default: a built-in mark · .svg or .png
       accent: "#5ad1ff"             # default #c6ff4a
       name: Example Co              # no default · the logo's alt text
+      contact: hello@example.com    # optional: email or https URL · linked on offline/failed/down
 
     # ── pages (per app or in defaults) ──
     pages:                          # default: the built-in pages · or `pages: bare`
@@ -178,12 +179,13 @@ Sizes take a unit (`512MiB`, `2GiB`, `768M`; `0` needs none). Durations are Go d
 | `logo` | built-in mark | SVG or PNG on the visitor pages. |
 | `accent` | `#c6ff4a` | Indicator colour. |
 | `name` | – | Your brand: the logo's alt text. |
+| `contact` | – | An email or `https://` URL, linked from the offline, failed and down pages. |
 
 **[pages](docs/configuration.md#pages-per-app-or-in-defaults)** (per app, or in `defaults`)
 
 | Key | Default | Meaning |
 |---|---|---|
-| `starting` · `offline` · `busy` · `failed` · `down` | built-in | Your own HTML file; `{{name}}`, `{{logo}}`, `{{accent}}` filled in. |
+| `starting` · `offline` · `busy` · `failed` · `down` | built-in | Your own HTML file; `{{name}}`, `{{logo}}`, `{{accent}}`, `{{contact}}` filled in. |
 | `pages: bare` | – | No bodies: status and headers only. |
 
 **[schedule](docs/configuration.md#schedule-per-app-or-in-defaults)** (per app, or in `defaults`): a list, default `[]`
@@ -239,7 +241,7 @@ From source: `go install github.com/fum4/waker/cmd/waker@latest`.
 | **Dependencies** | `depends_on: [db]` wakes the database before the app that needs it, and keeps it up (no idle stop, no eviction) while that app is. |
 | **Schedules** | `schedule: [{cron: "0 9 * * 1-5", for: 9h}]` keeps an app on during working hours, whatever its mode, and hands it back to its mode after. |
 | **Defaults** | A `defaults:` block sets any per-app key once; apps override it. `waker check --effective` prints what each app ends up with. |
-| **Pages** | starting, offline, busy, failed and down. They have a dark design, embedded font, your logo and accent colour, and make no external requests. They are `noindex` and never cached. Visitors only ever learn their app's state. Swap any of them for your own HTML file (the starting page still opens the app by itself, via `/__waker/wait.js`), or go `bare` (status and headers only). |
+| **Pages** | starting, offline, busy, failed and down. They have a dark design, embedded font, your logo and accent colour, an optional contact link, and make no external requests. They are `noindex` and never cached. Visitors only ever learn their app's state. Swap any of them for your own HTML file (the starting page still opens the app by itself, via `/__waker/wait.js`), or go `bare` (status and headers only). |
 | **Proxy** | Streams both ways (full duplex). Handles hop-by-hop headers correctly, keeps multi-value headers, and tunnels WebSocket upgrades. `/__waker/*` is reserved and never forwarded. |
 | **Control** | A unix socket readable only by waker's user (0600 in a 0700 dir). There is no network admin surface. |
 

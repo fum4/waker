@@ -15,7 +15,27 @@ import (
 var (
 	namePattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 	accentPattern = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
+	// emailPattern is deliberately narrower than RFC 5322: no quotes, spaces
+	// or angle brackets, so a contact never needs more than plain escaping.
+	emailPattern = regexp.MustCompile(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$`)
 )
+
+// ContactURLPrefix marks a branding.contact that is a URL; any other valid
+// contact is an email address.
+const ContactURLPrefix = "https://"
+
+// validContact reports whether c is a plain email address or an https URL
+// with a host (no credentials, no characters that need quoting).
+func validContact(c string) bool {
+	if emailPattern.MatchString(c) {
+		return true
+	}
+	if !strings.HasPrefix(c, ContactURLPrefix) || strings.ContainsAny(c, " \t\r\n\"'<>`\\") {
+		return false
+	}
+	u, err := url.Parse(c)
+	return err == nil && u.Host != "" && u.User == nil
+}
 
 // Validate checks the whole config and reports every problem at once, each
 // prefixed with the offending field's path (e.g. "apps[1].priority").
@@ -71,6 +91,9 @@ func (c *Config) appField(i int, add addFunc) (string, addFunc) {
 func (b Branding) validate(field string, add addFunc) {
 	if b.Accent != "" && !accentPattern.MatchString(b.Accent) {
 		add(field+".accent", "%q is not a #rgb or #rrggbb colour", b.Accent)
+	}
+	if b.Contact != "" && !validContact(b.Contact) {
+		add(field+".contact", "%q is not an email address or an https:// URL", b.Contact)
 	}
 	if b.Logo == "" {
 		return

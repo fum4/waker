@@ -67,6 +67,9 @@ type Branding struct {
 	// Name is the brand behind the logo (its alt text); the line under the
 	// indicator is always the app name.
 	Name string `yaml:"name,omitempty"`
+	// Contact is an email address or an https:// URL; when set, the offline,
+	// failed and down pages invite visitors to get in touch through it.
+	Contact string `yaml:"contact,omitempty"`
 }
 
 // App is one application the waker fronts.

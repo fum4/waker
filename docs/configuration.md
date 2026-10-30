@@ -124,6 +124,7 @@ resources:
 | `logo` | a neutral built-in mark | An SVG or PNG file, read at start and served at `/__waker/logo`. |
 | `accent` | `#c6ff4a` | The `#rgb` / `#rrggbb` colour of the starting indicator. |
 | `name` | – | Your brand: the logo's alt text. |
+| `contact` | – | Where visitors can reach you: a plain email address (`hello@example.com`, linked as `mailto:`) or an `https://` URL with a host (linked, shown without the scheme). When set, the offline, failed and down pages invite visitors to drop you a line there; unset, they don't mention it. Anything else fails `waker check`, naming the key (`apps[0] (web).branding.contact: "http://…" is not an email address or an https:// URL`, or `defaults.branding.contact: …` when inherited). Emails allow letters, digits and `._%+-` before the `@`; URLs may not contain spaces, quotes, `<`, `>` or credentials. |
 
 ## `pages` (per app, or in `defaults`)
 
@@ -137,13 +138,14 @@ pages:
 
 Each file is read once at start. `waker check` fails if one is missing, unreadable, a directory or over 1 MiB, naming the key (`apps[0] (web).pages.starting: open …: no such file or directory`, or `defaults.pages.starting: …` when inherited). A custom page is served with the same status and headers as the built-in one (503 or 502, `text/html`, `no-store`, `noindex`).
 
-Three placeholders are replaced, HTML-escaped; nothing else in the file is touched (it is not a template):
+Four placeholders are replaced, HTML-escaped; nothing else in the file is touched (it is not a template):
 
 | Placeholder | Becomes |
 |---|---|
 | `{{name}}` | The app's name. |
 | `{{logo}}` | `/__waker/logo`, the app's `branding.logo`. |
 | `{{accent}}` | `branding.accent`, else `#c6ff4a`. |
+| `{{contact}}` | `branding.contact` as written (an email or an `https://` URL), else empty. Build the link yourself, e.g. `<a href="mailto:{{contact}}">`. |
 
 ```html
 <!doctype html><html><head><meta charset="utf-8"><title>{{name}} is starting</title></head>

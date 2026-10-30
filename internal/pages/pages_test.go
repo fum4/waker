@@ -2,9 +2,9 @@ package pages
 
 import (
 	"bytes"
-	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -56,7 +56,7 @@ func TestEveryPageSharesTheBase(t *testing.T) {
 				t.Errorf("%s page lacks %q", page, want)
 			}
 		}
-		if !strings.Contains(s, "<title>"+escaped(c[0])+"</title>") {
+		if !strings.Contains(s, "<title>"+escaped(c.Title)+"</title>") {
 			t.Errorf("%s page title wrong", page)
 		}
 		if strings.Contains(s, "http://") || strings.Contains(s, "https://") {
@@ -67,9 +67,6 @@ func TestEveryPageSharesTheBase(t *testing.T) {
 		}
 	}
 }
-
-// escaped escapes like html/template does for the copy we use.
-func escaped(s string) string { return strings.ReplaceAll(s, "'", "&#39;") }
 
 func TestOnlyTheStartingPageLoadsTheWaitScript(t *testing.T) {
 	p := mustNew(t, config.App{})
@@ -86,24 +83,39 @@ func TestOnlyTheStartingPageLoadsTheWaitScript(t *testing.T) {
 	if bytes.Contains(html, []byte("fetch(")) || bytes.Contains(html, []byte("setInterval")) {
 		t.Fatal("the starting page still polls inline")
 	}
-	if !bytes.Contains(Wait(), []byte(`fetch("/__waker/status"`)) || !bytes.Contains(Wait(), []byte(`getElementById("waker-ends")`)) {
+	w := Wait()
+	if !bytes.Contains(w, []byte(`fetch("/__waker/status"`)) || !bytes.Contains(w, []byte(`querySelectorAll("template.waker-end")`)) {
 		t.Fatal("wait.js does not poll the status or read the end copy")
+	}
+	if !bytes.Contains(w, []byte("replaceChildren(end.content.cloneNode(true))")) || bytes.Contains(w, []byte("innerHTML")) {
+		t.Fatal("wait.js must swap in the server-rendered end copy, never build HTML")
 	}
 }
 
+var endTemplate = regexp.MustCompile(`<template class="waker-end" data-page="(\w+)" data-title="([^"]*)">(.*?)</template>`)
+
+// The starting page's swap copy is exactly what the end page itself says,
+// contact link included, so the two can never drift.
 func TestTheStartingPageCarriesTheFailedAndBusyCopy(t *testing.T) {
-	html, _ := mustNew(t, config.App{}).Render(Starting)
-	const open = `<script type="application/json" id="waker-ends">`
-	_, rest, ok := bytes.Cut(html, []byte(open))
-	data, _, _ := bytes.Cut(rest, []byte("</script>"))
-	var ends map[string][2]string
-	if err := json.Unmarshal(data, &ends); !ok || err != nil {
-		t.Fatalf("end copy is not JSON (%v): %s", err, data)
-	}
-	for _, e := range startingEnds {
-		if ends[e] != copyText[e] {
-			t.Errorf("%s end copy = %q", e, ends[e])
-		}
+	for _, c := range contacts {
+		t.Run(c.name, func(t *testing.T) {
+			p := mustNew(t, config.App{Branding: config.Branding{Contact: c.contact}})
+			html, _ := p.Render(Starting)
+			got := endTemplate.FindAllStringSubmatch(string(html), -1)
+			if len(got) != len(startingEnds) {
+				t.Fatalf("%d end templates, want %d: %s", len(got), len(startingEnds), html)
+			}
+			for i, e := range startingEnds {
+				page, _ := p.Render(e)
+				if got[i][1] != e || got[i][2] != escaped(copyText[e].Title) || got[i][3] != mainText.FindStringSubmatch(string(page))[1] {
+					t.Errorf("%s end = %q", e, got[i][1:])
+				}
+			}
+			failed := got[0][3]
+			if c.link != "" && !strings.HasSuffix(failed, "drop us a line at "+c.link+".") || c.link == "" && strings.Contains(failed, "<a ") {
+				t.Errorf("failed end contact variant wrong: %q", failed)
+			}
+		})
 	}
 }
 
