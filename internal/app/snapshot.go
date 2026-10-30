@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/fum4/waker/internal/config"
+	"github.com/fum4/waker/internal/memory"
 )
 
 // Snapshot is an app's full status for the control socket. Visitors never
@@ -20,12 +21,14 @@ type Snapshot struct {
 	OverrideSince *time.Time       `json:"override_since"`
 	State         State            `json:"state"`
 	Error         string           `json:"error,omitempty"`
-	Priority      int              `json:"priority"`
+	Priority      float64          `json:"priority"`
 	Heartbeat     bool             `json:"heartbeat"`
 	LastActivity  time.Time        `json:"last_activity"`
 	Inflight      int              `json:"inflight"`
 	IdleIn        *config.Duration `json:"idle_in,omitempty"`
 	Evicted       *Eviction        `json:"evicted"`
+	// Memory is filled in by the daemon, which owns the budget.
+	Memory *memory.Breakdown `json:"memory,omitempty"`
 }
 
 // Snapshot probes health and returns the app's status. IdleIn is set only

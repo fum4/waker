@@ -22,8 +22,8 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "%s: ok — %d app(s), headroom %s…%s\n",
-		path, len(cfg.Apps), cfg.MinHeadroom, cfg.MaxHeadroom)
+	fmt.Fprintf(stdout, "%s: ok — %d app(s), headroom curve %s, eviction %s\n",
+		path, len(cfg.Apps), cfg.Resources.Headroom.Curve, cfg.Resources.Eviction.Summary())
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "APP\tLISTEN\tUPSTREAM\tMODE\tIDLE\tPRIORITY\tMEMORY")
 	for _, a := range cfg.Apps {
@@ -31,7 +31,7 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 		if a.Memory > 0 {
 			mem = a.Memory.String()
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%d\t%s\n",
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%g\t%s\n",
 			a.Name, a.Listen, a.Upstream, a.Mode, a.Idle, a.Priority, mem)
 	}
 	return tw.Flush()

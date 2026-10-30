@@ -7,6 +7,8 @@ import (
 
 	"github.com/fum4/waker/internal/app"
 	"github.com/fum4/waker/internal/config"
+	"github.com/fum4/waker/internal/control"
+	"github.com/fum4/waker/internal/memory"
 )
 
 // renderStatus prints one app the way `waker status` shows it.
@@ -26,16 +28,49 @@ func renderStatus(w io.Writer, s app.Snapshot, now time.Time) {
 		act += " · idle stop in " + ago(s.IdleIn.D())
 	}
 	line(w, "activity", act)
-	prio := fmt.Sprintf("%d", s.Priority)
+	prio := fmt.Sprintf("%g", s.Priority)
 	if e := s.Evicted; e != nil {
-		prio += fmt.Sprintf(" · last evicted by %s (p%d) %s ago", e.By, e.Priority, ago(now.Sub(e.At)))
+		prio += fmt.Sprintf(" · last evicted by %s (p%g) %s ago", e.By, e.Priority, ago(now.Sub(e.At)))
 	}
 	line(w, "priority", prio)
+	if s.Memory != nil {
+		line(w, "memory", memoryText(*s.Memory))
+	}
 	hb := "injected into its pages"
 	if !s.Heartbeat {
 		hb = "off (heartbeat: false)"
 	}
 	line(w, "heartbeat", hb)
+}
+
+// renderPolicy prints the effective resource policy above the apps.
+func renderPolicy(w io.Writer, p control.Policy) {
+	avail := "unknown"
+	if p.AvailableMiB != nil {
+		avail = fmt.Sprintf("%d MiB", *p.AvailableMiB)
+	}
+	fmt.Fprintf(w, "memory policy — headroom %s · reserve %d MiB · eviction %s · available %s\n",
+		p.Headroom, p.ReserveMiB, p.Eviction, avail)
+}
+
+// memoryText: need N + headroom(<from>) H [+ reserve R] = X MiB required to boot (…).
+func memoryText(m memory.Breakdown) string {
+	text := fmt.Sprintf("need %d + headroom(%s) %d", m.NeedMiB, m.HeadroomFrom, m.HeadroomMiB)
+	if m.ReserveMiB > 0 {
+		text += fmt.Sprintf(" + reserve %d", m.ReserveMiB)
+	}
+	text += fmt.Sprintf(" = %d MiB required to boot", m.RequiredMiB)
+	if m.DeclaredMiB == nil && m.LearnedMiB == nil {
+		return text + " (need: the default, nothing declared or learned)"
+	}
+	return text + fmt.Sprintf(" (need = max(declared %s, learned %s))", orNone(m.DeclaredMiB), orNone(m.LearnedMiB))
+}
+
+func orNone(v *int64) string {
+	if v == nil {
+		return "none"
+	}
+	return fmt.Sprintf("%d", *v)
 }
 
 func modeText(s app.Snapshot, now time.Time) string {

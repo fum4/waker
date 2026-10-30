@@ -52,10 +52,11 @@ func runStatus(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	snaps, err := c.Status(context.Background())
+	report, err := c.Status(context.Background())
 	if err != nil {
 		return err
 	}
+	snaps := report.Apps
 	if len(pos) == 1 {
 		snaps = filterApp(snaps, pos[0])
 		if len(snaps) == 0 {
@@ -65,13 +66,13 @@ func runStatus(args []string, stdout, stderr io.Writer) error {
 	if *asJSON {
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(snaps)
+		report.Apps = snaps
+		return enc.Encode(report)
 	}
 	now := time.Now()
-	for i, s := range snaps {
-		if i > 0 {
-			fmt.Fprintln(stdout)
-		}
+	renderPolicy(stdout, report.Policy)
+	for _, s := range snaps {
+		fmt.Fprintln(stdout)
 		renderStatus(stdout, s, now)
 	}
 	return nil
