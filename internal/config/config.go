@@ -84,7 +84,7 @@ type App struct {
 func (a App) HeartbeatEnabled() bool { return a.Heartbeat == nil || *a.Heartbeat }
 
 // Health is how the waker decides an app is up: an HTTP GET of Path on the
-// upstream answering below 500, or Command exiting 0.
+// upstream answering below 400 (redirects count as up), or Command exiting 0.
 type Health struct {
 	Path     string   `yaml:"path"`
 	Command  []string `yaml:"command"`
@@ -106,12 +106,14 @@ const (
 	DefaultMode           = ModeOnDemand
 	DefaultIdle           = 30 * time.Minute
 	DefaultPriority       = 5
-	DefaultBootTimeout    = 120 * time.Second
+	DefaultBootTimeout    = 600 * time.Second
 	DefaultStopTimeout    = 10 * time.Second
 	DefaultHealthPath     = "/"
-	DefaultHealthInterval = 500 * time.Millisecond
-	DefaultHealthTimeout  = 2 * time.Second
-	DefaultPeakSource     = PeakProcTree
-	MinPriority           = 1
-	MaxPriority           = 10
+	DefaultHealthInterval = time.Second
+	// DefaultNeed is the memory need of an app with nothing declared or learned.
+	DefaultNeed          = 1024 * MiB
+	DefaultHealthTimeout = 2 * time.Second
+	DefaultPeakSource    = PeakProcTree
+	MinPriority          = 1
+	MaxPriority          = 10
 )

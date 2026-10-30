@@ -51,7 +51,7 @@ func TestLoadAppliesDefaults(t *testing.T) {
 		{"idle", a.Idle.D() == 30*time.Minute},
 		{"priority", a.Priority == 5},
 		{"heartbeat", a.HeartbeatEnabled()},
-		{"boot_timeout", a.BootTimeout.D() == 120*time.Second},
+		{"boot_timeout", a.BootTimeout.D() == 600*time.Second},
 		{"health.path", a.Health.Path == "/"},
 		{"peak.source", a.Peak.Source == PeakProcTree},
 	}
