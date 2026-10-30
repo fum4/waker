@@ -85,15 +85,3 @@ func TestOptOut(t *testing.T) {
 		t.Fatalf("= %q %v", body, resp.Header)
 	}
 }
-
-func TestWithTag(t *testing.T) {
-	tests := map[string]string{
-		"<body><pre></body></pre></BODY >": "<body><pre></body></pre>" + HeartbeatTag + "</BODY >",
-		"<p>hi":                            "<p>hi" + HeartbeatTag,
-	}
-	for in, want := range tests {
-		if got := string(withTag([]byte(in))); got != want {
-			t.Errorf("withTag(%q) = %q, want %q", in, got, want)
-		}
-	}
-}

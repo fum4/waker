@@ -109,7 +109,7 @@ func newLiveProc(t *testing.T, mutate func(*config.App), setup func(*liveProcess
 	setup(proc)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	a := app.New(ac, app.Deps{Clock: clock.Real{}, Process: proc, Log: log}, nil)
-	pg, err := pages.New(ac.Branding)
+	pg, err := pages.New(ac)
 	if err != nil {
 		t.Fatal(err)
 	}

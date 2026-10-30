@@ -76,6 +76,7 @@ func TestAssetsAreServedWithoutWaking(t *testing.T) {
 		"/__waker/font.woff2":   "font/woff2",
 		"/__waker/logo":         "image/svg+xml",
 		"/__waker/heartbeat.js": "text/javascript; charset=utf-8",
+		"/__waker/wait.js":      "text/javascript; charset=utf-8",
 	} {
 		resp, body := l.do(t, "GET", path, nil)
 		if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != ctype || resp.Header.Get("Cache-Control") != "private, max-age=3600" || body == "" {

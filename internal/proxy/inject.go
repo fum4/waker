@@ -6,9 +6,10 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/fum4/waker/internal/pages"
 )
 
 // HeartbeatTag is injected into every HTML page so an open tab keeps an
@@ -18,8 +19,6 @@ const HeartbeatTag = `<script src="/__waker/heartbeat.js" defer></script>`
 // InjectMaxBytes caps how much of a page is buffered for injection; bigger
 // pages pass through untouched.
 const InjectMaxBytes = 5 << 20
-
-var bodyClose = regexp.MustCompile(`(?i)</body\s*>`)
 
 type pageLoadKey struct{}
 
@@ -51,7 +50,7 @@ func injectHeartbeat(resp *http.Response) error {
 		return nil
 	}
 	resp.Body.Close()
-	body := withTag(head)
+	body := pages.WithTag(head, HeartbeatTag)
 	resp.Body = io.NopCloser(bytes.NewReader(body))
 	resp.ContentLength = int64(len(body))
 	resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
@@ -68,19 +67,6 @@ func injectable(resp *http.Response) bool {
 	mt, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	enc := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding")))
 	return mt == "text/html" && (enc == "" || enc == "identity")
-}
-
-// withTag inserts the tag before the last </body>, or appends it.
-func withTag(page []byte) []byte {
-	locs := bodyClose.FindAllIndex(page, -1)
-	if len(locs) == 0 {
-		return append(page, HeartbeatTag...)
-	}
-	at := locs[len(locs)-1][0]
-	out := make([]byte, 0, len(page)+len(HeartbeatTag))
-	out = append(out, page[:at]...)
-	out = append(out, HeartbeatTag...)
-	return append(out, page[at:]...)
 }
 
 type readCloser struct {
