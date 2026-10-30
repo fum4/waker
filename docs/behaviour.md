@@ -50,9 +50,19 @@ Boots are serialised per app: any number of concurrent requests share one boot. 
 
 - **Arming.** On-demand apps have a deadline: last activity + `idle`. waker's loop sleeps exactly until the nearest deadline, capped at 60 s.
 - **What counts as activity:** forwarded requests (non-ignored paths), measured from the request's **end**. Also heartbeats, the end of a boot, and mode changes.
-- **No deadline** exists while a request is in flight (long downloads and open WebSockets keep the app up) or while the app boots.
+- **No deadline** exists while a request is in flight (long downloads and open WebSockets keep the app up), while the app boots, or while a [dependent](#dependencies) is up.
 - **The stop fires once**, then stays disarmed until the next activity. It doesn't consult health: an unhealthy but running app is stopped too.
 - **A stop is committed atomically** with the in-flight check. A request that arrives while the app is stopping waits for the stop to finish, then wakes the app again; it is never forwarded to a process that is going down. A new boot waits until the previous process has fully stopped.
+
+## Dependencies
+
+For an app with [`depends_on`](configuration.md#depends_on-per-app-or-in-defaults):
+
+- **Wake order.** Waking the app wakes every dependency first, in parallel, each as if a request had woken it: its own memory check and eviction, its own boot. A dependency that is already up isn't booted. The app's own memory check and start wait until all of them are healthy; it shows `starting` throughout. Its `boot_timeout` covers the whole boot, dependencies included.
+- **Failure.** If a dependency ends failed or busy, is in mode `off` (it is never woken then), or isn't up within the app's `boot_timeout`, the app's boot fails without starting it, and `waker status` names the dependency: `failed — dependency db: offline (mode off)`. The usual 120 s cooldown applies.
+- **Keep-up.** While a dependent that waker started is up, booting or stopping, the dependency has no idle deadline and is never evicted. `waker status` shows it as `needed by: api`.
+- **Release.** When the last dependent stops (idle, eviction, mode `off`, shutdown), the dependency's idle clock restarts from that moment, so it stops after its own `idle`.
+- **Shutdown** stops dependents before their dependencies.
 
 ## Heartbeat
 
@@ -82,4 +92,4 @@ memory:    need 900 + headroom(linear p7.5) 1422 = 2322 MiB required to boot (ne
   - Overrides for apps no longer configured are dropped.
   - Setting the declared mode removes the override.
 - **Startup.** `on` apps that aren't healthy are booted. A listener that can't bind (port in use) is skipped and reported by `waker status`; the other apps still run.
-- **Shutdown.** On SIGTERM/SIGINT, waker drains connections for up to 5 s, then stops every app it started.
+- **Shutdown.** On SIGTERM/SIGINT, waker drains connections for up to 5 s, then stops every app it started, dependents before their dependencies.
