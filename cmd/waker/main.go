@@ -22,6 +22,10 @@ var errUsage = errors.New("usage")
 
 func commands() []command {
 	return []command{
+		{"serve", "run the waker daemon", runServe},
+		{"status", "show every app (or one): mode, state, activity, priority", runStatus},
+		{"mode", "set an app's runtime mode: mode <app> on|off|on-demand [--idle 10s]", runMode},
+		{"reset", "drop an app's runtime mode override", runReset},
 		{"check", "validate the config file and print a summary", runCheck},
 		{"version", "print the waker version", runVersion},
 	}

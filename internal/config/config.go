@@ -52,7 +52,8 @@ type Branding struct {
 	Logo string `yaml:"logo"`
 	// Accent is a CSS hex colour (#rgb or #rrggbb) for the indicator.
 	Accent string `yaml:"accent"`
-	// Name replaces the app name under the indicator when set.
+	// Name is the brand behind the logo (its alt text); the line under the
+	// indicator is always the app name.
 	Name string `yaml:"name"`
 }
 

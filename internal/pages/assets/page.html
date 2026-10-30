@@ -1,0 +1,23 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="robots" content="noindex"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><title>{{.Title}}</title><style>:root{--sig:{{.Accent}}}{{.Style}}</style></head>
+<body data-page="{{.Page}}"><main>
+<div class="logo"><img src="/__waker/logo" alt="{{.Brand}}"></div>
+<h1 id="title">{{.Title}}</h1><p id="text">{{.Text}}</p>
+<div class="decode" aria-hidden="true"><span data-g="1"></span><span data-g="0"></span><span data-g="1"></span><span data-g="1"></span><span data-g="0"></span><span data-g="0"></span><i class="cursor"></i></div>
+<p class="name">{{.Name}}</p>
+</main>{{if .Ends}}<script>
+const ends = {{.Ends}};
+const poll = setInterval(async () => {
+  try {
+    const s = await (await fetch("/__waker/status", {cache: "no-store"})).json();
+    if (s.state === "up") location.reload();
+    if (ends[s.state]) {
+      clearInterval(poll);
+      document.body.dataset.page = s.state;
+      document.title = document.getElementById("title").textContent = ends[s.state][0];
+      document.getElementById("text").textContent = ends[s.state][1];
+    }
+  } catch (e) {}
+}, 3000);
+</script>{{end}}</body></html>
