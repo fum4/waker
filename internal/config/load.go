@@ -70,12 +70,7 @@ func Parse(data []byte) (*Config, error) {
 }
 
 func (c *Config) applyDefaults() {
-	if c.MaxHeadroom == 0 {
-		c.MaxHeadroom = DefaultMaxHeadroom
-	}
-	if c.MinHeadroom == 0 {
-		c.MinHeadroom = DefaultMinHeadroom
-	}
+	c.Resources.applyDefaults()
 	if c.StateDir == "" {
 		c.StateDir = defaultStateDir()
 	}
@@ -94,8 +89,9 @@ func (a *App) applyDefaults() {
 	if a.Idle == 0 {
 		a.Idle = Duration(DefaultIdle)
 	}
-	if a.Priority == 0 {
-		a.Priority = DefaultPriority
+	a.Priority = DefaultPriority
+	if a.PriorityRaw != nil {
+		a.Priority = *a.PriorityRaw
 	}
 	if a.BootTimeout == 0 {
 		a.BootTimeout = Duration(DefaultBootTimeout)
@@ -112,8 +108,8 @@ func (a *App) applyDefaults() {
 	if a.Health.Timeout == 0 {
 		a.Health.Timeout = Duration(DefaultHealthTimeout)
 	}
-	if a.Peak.Source == "" {
-		a.Peak.Source = DefaultPeakSource
+	if a.MemorySource == "" {
+		a.MemorySource = DefaultMemorySource
 	}
 }
 

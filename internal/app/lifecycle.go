@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/fum4/waker/internal/config"
@@ -22,6 +23,16 @@ func (a *App) Stop(why string) {
 	if err := a.d.Process.Stop(context.Background()); err != nil {
 		a.d.Log.Warn("stop command failed", "err", err)
 	}
+}
+
+// Evict stops the app to make room for by, recording who did it. The idle
+// clock stays disarmed until the app's next activity.
+func (a *App) Evict(by *App) {
+	a.activity.Disarm()
+	a.mu.Lock()
+	a.evicted = &Eviction{By: by.Name(), Priority: by.Priority(), At: a.d.Clock.Now().UTC().Truncate(time.Second)}
+	a.mu.Unlock()
+	a.Stop(fmt.Sprintf("evicted by %s (p%g)", by.Name(), by.Priority()))
 }
 
 // DeadlineIn returns the time left until an idle stop; ok is false when

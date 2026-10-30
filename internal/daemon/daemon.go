@@ -18,6 +18,7 @@ import (
 	"github.com/fum4/waker/internal/config"
 	"github.com/fum4/waker/internal/control"
 	"github.com/fum4/waker/internal/idle"
+	"github.com/fum4/waker/internal/memory"
 	"github.com/fum4/waker/internal/pages"
 	"github.com/fum4/waker/internal/proxy"
 	"github.com/fum4/waker/internal/state"
@@ -33,9 +34,15 @@ type Daemon struct {
 	pages *pages.Pages
 	sig   idle.Signal
 	all   []*app.App
+	procs map[string]*boot.Process
+
+	avail   memory.Available
+	budget  *memory.Budget
+	sampler *memory.Sampler
 
 	mu        sync.Mutex
 	overrides map[string]state.Override
+	peaks     map[string]state.Peak
 	listening []*app.App // apps whose listener bound, in config order
 	skipped   map[string]string
 }
@@ -46,18 +53,24 @@ func New(cfg *config.Config, log *slog.Logger) (*Daemon, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := &Daemon{cfg: cfg, log: log, pages: pg, sig: idle.NewSignal(), skipped: map[string]string{}}
+	d := &Daemon{cfg: cfg, log: log, pages: pg, sig: idle.NewSignal(), skipped: map[string]string{},
+		procs: map[string]*boot.Process{}, avail: memory.NewMeminfo()}
 	d.overrides = d.loadOverrides()
+	gate := d.newGate()
 	for _, ac := range cfg.Apps {
 		var o *state.Override
 		if v, ok := d.overrides[ac.Name]; ok {
 			o = &v
 		}
+		proc := boot.New(ac)
+		d.procs[ac.Name] = proc
 		d.all = append(d.all, app.New(ac, app.Deps{
 			Clock:   clock.Real{},
-			Process: boot.New(ac),
+			Process: proc,
+			Gate:    gate,
 			Notify:  d.sig.Notify,
 			Persist: d.persist,
+			OnStop:  d.recordPeak,
 			Log:     log,
 		}, o))
 	}
@@ -85,6 +98,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 			a.Wake(ctx)
 		}
 	}
+	go d.sample(ctx)
 	idle.Loop(ctx, d.sig, d.step)
 
 	shutdown, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)

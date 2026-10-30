@@ -17,8 +17,8 @@ import (
 
 type fakeBackend struct{ last *config.Mode }
 
-func (f *fakeBackend) Status(context.Context) []app.Snapshot {
-	return []app.Snapshot{{Name: "shop", State: app.Up}}
+func (f *fakeBackend) Status(context.Context) Report {
+	return Report{Policy: Policy{Eviction: "off"}, Apps: []app.Snapshot{{Name: "shop", State: app.Up}}}
 }
 
 func (f *fakeBackend) Health() Health {
@@ -82,7 +82,7 @@ func TestRoundTrips(t *testing.T) {
 	c, b, _ := serve(t)
 	ctx := context.Background()
 	st, err := c.Status(ctx)
-	if err != nil || len(st) != 1 || st[0].State != app.Up {
+	if err != nil || len(st.Apps) != 1 || st.Apps[0].State != app.Up || st.Policy.Eviction != "off" {
 		t.Fatalf("status = %+v, %v", st, err)
 	}
 	h, err := c.Health(ctx)

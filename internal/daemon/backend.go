@@ -15,12 +15,12 @@ import (
 )
 
 // Status implements control.Backend.
-func (d *Daemon) Status(ctx context.Context) []app.Snapshot {
-	out := make([]app.Snapshot, 0, len(d.listening))
+func (d *Daemon) Status(ctx context.Context) control.Report {
+	r := control.Report{Policy: d.policy(), Apps: make([]app.Snapshot, 0, len(d.listening))}
 	for _, a := range d.listening {
-		out = append(out, a.Snapshot(ctx))
+		r.Apps = append(r.Apps, d.withMemory(a, a.Snapshot(ctx)))
 	}
-	return out
+	return r
 }
 
 // Health implements control.Backend.
@@ -57,7 +57,7 @@ func (d *Daemon) SetMode(name string, mode *config.Mode, idle time.Duration) (ap
 		return app.Snapshot{}, err
 	}
 	d.log.Info("mode set", "app", name, "mode", target.Mode(), "idle", target.Idle(), "override", target.Override() != nil)
-	return target.Snapshot(context.Background()), nil
+	return d.withMemory(target, target.Snapshot(context.Background())), nil
 }
 
 // loadOverrides reads modes.json. A corrupt file is logged and ignored, so

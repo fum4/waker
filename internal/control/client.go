@@ -35,9 +35,9 @@ func NewClient(path string) *Client {
 	}}
 }
 
-// Status returns every listening app's snapshot.
-func (c *Client) Status(ctx context.Context) ([]app.Snapshot, error) {
-	var out []app.Snapshot
+// Status returns the policy and every listening app.s snapshot.
+func (c *Client) Status(ctx context.Context) (Report, error) {
+	var out Report
 	return out, c.call(ctx, http.MethodGet, "/status", nil, &out)
 }
 
