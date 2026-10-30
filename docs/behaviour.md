@@ -105,9 +105,9 @@ waker sees only requests that reach its `listen` address. A caller that talks to
 
 ## Memory
 
-Before every boot, waker compares `/proc/meminfo` MemAvailable with the app's requirement, minus what other admitted boots still starting have reserved, so two concurrent boots never count the same free memory; see [configuration.md § resources](configuration.md#resources).
+Before every boot, waker compares available memory (`/proc/meminfo` MemAvailable on Linux, `vm_stat` on macOS) with the app's requirement, minus what other admitted boots still starting have reserved, so two concurrent boots never count the same free memory; see [configuration.md § resources](configuration.md#resources).
 
-**The learned peak** is measured before each stop and stored in `peaks.json`. It replaces the previous figure, so an app that slims down gets cheaper. It comes from the started process tree's RSS (sampled every 5 s), or from the systemd unit's `MemoryPeak`.
+**The learned peak** is measured before each stop and stored in `peaks.json`. It replaces the previous figure, so an app that slims down gets cheaper. It comes from the started process tree's RSS (sampled every 5 s), or from the systemd unit's `MemoryPeak`. Both are Linux only; on macOS nothing is learned (`memory_source: none`), so set `memory` per app or each counts as 1024 MiB.
 
 `waker status` prints the policy, then each app's breakdown:
 

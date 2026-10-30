@@ -19,6 +19,7 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
   - float priorities;
   - eviction of lower-priority idle apps (policy, order, protect list);
   - peaks learned from the process tree or a systemd unit.
+- macOS support for memory-aware boots: `resources.available_source: vm_stat` (the default on macOS; `meminfo` stays the Linux default). `memory_source` defaults to `none` there, and `waker check` rejects `proctree` and `systemd`.
 - A top-level `defaults:` block every app inherits (app > defaults > built-in), and `waker check --effective` to print the resolved config.
 - `depends_on:` per app (or in `defaults`): dependencies are woken first and kept up (no idle stop, no eviction) while a dependent is up; cycles and unknown names fail `waker check`.
 - `schedule:` per app (or in `defaults`): cron windows (`{cron: "0 9 * * 1-5", for: 9h}`) during which the app is `on` whatever its declared mode; overrides still win.

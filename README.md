@@ -73,7 +73,7 @@ apps:
     heartbeat: true                 # default true
     priority: 5                     # default 5 · 1 (lowest) to 10, fractions allowed
     memory: 512MiB                  # no default · need = max(memory, learned peak), else 1024MiB
-    memory_source: proctree         # default proctree · proctree | systemd | none
+    memory_source: proctree         # default proctree (none on macOS) · proctree | systemd | none
     # systemd_unit: web.service     # no default · required with memory_source: systemd
     # headroom: 1GiB                # no default · replaces the curve for this app
     evictable: true                 # default true
@@ -107,7 +107,7 @@ resources:
     # table: {1: 4GiB, 2: 3GiB, …}  # curve table: required, all ten priorities
     # value: 1GiB                   # curve fixed: required
   reserve: 0                        # default 0 · kept free on top of every headroom
-  available_source: meminfo         # default meminfo (the only one)
+  available_source: meminfo         # default meminfo on Linux · vm_stat on macOS
   eviction:
     enabled: true                   # default true
     policy: lower-priority          # default lower-priority · lower-or-equal | never
@@ -150,7 +150,7 @@ Sizes take a unit (`512MiB`, `2GiB`, `768M`; `0` needs none). Durations are Go d
 | `heartbeat` | `true` | Inject the keep-awake script into HTML pages. |
 | `priority` | `5` | 1–10, fractions allowed; headroom and eviction rank. |
 | `memory` | – | Declared need; the learned peak raises it. |
-| `memory_source` · `systemd_unit` | `proctree` · – | Where the peak is learned: `proctree`, `systemd`, `none`. |
+| `memory_source` · `systemd_unit` | `proctree` (macOS: `none`) · – | Where the peak is learned: `proctree`, `systemd` (both Linux only), `none`. |
 | `headroom` | – (the curve) | Absolute headroom for this app. |
 | `evictable` | `true` | `false` = never evicted. |
 | `depends_on` | `[]` | Apps woken first and kept up while this one is ([details](docs/configuration.md#depends_on-per-app-or-in-defaults)). |
@@ -163,7 +163,7 @@ Sizes take a unit (`512MiB`, `2GiB`, `768M`; `0` needs none). Durations are Go d
 | `headroom.max` · `headroom.min` | `5120MiB` · `512MiB` | Linear: headroom at priority 1, and the floor. |
 | `headroom.table` · `headroom.value` | – | Table: all ten priorities. Fixed: the one value. |
 | `reserve` | `0` | Kept free on top of every headroom. |
-| `available_source` | `meminfo` | The only source today. |
+| `available_source` | `meminfo` (macOS: `vm_stat`) | Where free memory is read; one per platform. |
 | `eviction.enabled` | `true` | Evict at all. |
 | `eviction.policy` | `lower-priority` | `lower-or-equal` · `never`. |
 | `eviction.order` | `priority-then-idle` | `idle-then-priority`. |
@@ -204,7 +204,7 @@ waker makes different trade-offs:
 - **Dependencies and schedules** are built in: wake the database first, keep the CRM up on weekdays.
 - **One binary, one YAML file**, with no other moving parts.
 
-Choose Sablier if your apps are containers behind Traefik/Caddy, or you need Kubernetes or multi-replica groups. Choose waker for processes on a single host where memory is the constraint. Today waker is Linux-first: memory availability is read from `/proc/meminfo`, and other sources plug in behind an interface. It also manages one host only.
+Choose Sablier if your apps are containers behind Traefik/Caddy, or you need Kubernetes or multi-replica groups. Choose waker for processes on a single host where memory is the constraint. waker runs on Linux and macOS. Available memory comes from `/proc/meminfo` on Linux and from `vm_stat` on macOS. Learning an app's peak is Linux only, so on macOS you declare `memory` per app. It also manages one host only.
 
 ## CLI
 
@@ -233,7 +233,7 @@ From source: `go install github.com/fum4/waker/cmd/waker@latest`.
 | **Idle clock** | Deadline-driven and exact to well under a second. Activity counts from a request's end, and nothing is stopped while a request is in flight. `idle_ignore` paths (pollers, health checks) never count as activity and never wake the app. |
 | **Waiting** | Programs are held through a cold boot and forwarded, body included, once the app is healthy. Browsers get the starting page, or are held too with `waiting: hold`. `hold_timeout` bounds the wait. |
 | **Heartbeat** | A tiny script is injected into the app's HTML pages. It keeps an on-demand app awake while someone is actually reading. Non-browser clients keep it awake with [`POST /__waker/active`](#keeping-an-app-awake-from-a-program). Opt out per app. |
-| **Memory** | An app boots only when `need + headroom(priority) + reserve` is available. Need is the declared size or the learned peak, whichever is higher. The peak is learned from the process tree's RSS, or from a systemd unit's MemoryPeak. When short, waker evicts lower-priority, idle, on-demand apps it started, one at a time. It never evicts pointlessly. |
+| **Memory** | An app boots only when `need + headroom(priority) + reserve` is available. Need is the declared size or the learned peak, whichever is higher. The peak is learned from the process tree's RSS, or from a systemd unit's MemoryPeak (Linux; on macOS declare `memory`). When short, waker evicts lower-priority, idle, on-demand apps it started, one at a time. It never evicts pointlessly. |
 | **Dependencies** | `depends_on: [db]` wakes the database before the app that needs it, and keeps it up (no idle stop, no eviction) while that app is. |
 | **Schedules** | `schedule: [{cron: "0 9 * * 1-5", for: 9h}]` keeps an app on during working hours, whatever its mode, and hands it back to its mode after. |
 | **Defaults** | A `defaults:` block sets any per-app key once; apps override it. `waker check --effective` prints what each app ends up with. |
