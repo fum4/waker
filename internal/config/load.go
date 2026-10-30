@@ -97,6 +97,7 @@ func Parse(data []byte) (*Config, error) {
 		return nil, err
 	}
 	cfg.inherited = got
+	cfg.dropInheritedSelfDeps()
 	cfg.applyDefaults()
 	return &cfg, nil
 }

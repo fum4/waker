@@ -74,6 +74,9 @@ type App struct {
 	// while a stop of the previous process is still running.
 	life  sync.Mutex
 	cache stateCache
+	// deps and dependents are set by SetDependencies before serving and
+	// never change after, so they are read without a lock.
+	deps, dependents []*App
 
 	mu           sync.Mutex
 	override     *state.Override

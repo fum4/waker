@@ -48,6 +48,34 @@ func TestRenderStatus(t *testing.T) {
 	}
 }
 
+func TestRenderDependencies(t *testing.T) {
+	tests := []struct {
+		name      string
+		deps, by  []string
+		want, not []string
+	}{
+		{"none", nil, nil, nil, []string{"needs:", "needed by:"}},
+		{"a dependent", []string{"db", "cache"}, nil, []string{"  needs:     db, cache\n"}, []string{"needed by:"}},
+		{"a dependency kept up", nil, []string{"api", "web"}, []string{"  needed by: api, web · kept up, no idle stop or eviction\n"}, []string{"needs:"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			renderStatus(&buf, app.Snapshot{Name: "db", State: app.Up, DependsOn: tt.deps, KeptUpBy: tt.by}, time.Now())
+			for _, w := range tt.want {
+				if !strings.Contains(buf.String(), w) {
+					t.Errorf("missing %q in:\n%s", w, buf.String())
+				}
+			}
+			for _, n := range tt.not {
+				if strings.Contains(buf.String(), n) {
+					t.Errorf("unexpected %q in:\n%s", n, buf.String())
+				}
+			}
+		})
+	}
+}
+
 func TestMemoryAndPolicyLines(t *testing.T) {
 	learned, declared := int64(900), int64(800)
 	tests := []struct {
@@ -95,5 +123,22 @@ func TestStatusWithoutAWaker(t *testing.T) {
 	}
 	if code, _, _ := runCLI("mode", "web", "--config", cfg); code != 2 {
 		t.Fatalf("mode with one arg = %d", code)
+	}
+}
+
+func TestOffWarning(t *testing.T) {
+	tests := []struct {
+		name string
+		snap app.Snapshot
+		want string
+	}{
+		{"off, dependents up", app.Snapshot{Name: "db", Mode: config.ModeOff, KeptUpBy: []string{"api", "web"}}, "warning: db is off while api, web (up) still need it"},
+		{"off, no dependents", app.Snapshot{Name: "db", Mode: config.ModeOff}, ""},
+		{"on-demand, dependents up", app.Snapshot{Name: "db", Mode: config.ModeOnDemand, KeptUpBy: []string{"api"}}, ""},
+	}
+	for _, tt := range tests {
+		if got := offWarning(tt.snap); got != tt.want {
+			t.Errorf("%s: offWarning = %q, want %q", tt.name, got, tt.want)
+		}
 	}
 }
