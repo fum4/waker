@@ -20,6 +20,9 @@ var (
 	emailPattern = regexp.MustCompile(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$`)
 )
 
+// ValidName reports whether s is a valid app name.
+func ValidName(s string) bool { return namePattern.MatchString(s) }
+
 // ContactURLPrefix marks a branding.contact that is a URL; any other valid
 // contact is an email address.
 const ContactURLPrefix = "https://"
