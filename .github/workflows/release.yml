@@ -1,0 +1,37 @@
+# A v* tag cuts a release: goreleaser builds linux and darwin, amd64 and
+# arm64 (.goreleaser.yaml), and publishes them with SHA256SUMS as a GitHub
+# Release.
+#
+# TODO(release-site): upload to releases.nomadware.io (R2) and sign the
+# artifacts — waits on the owner's go for the releases site
+# (docs/work/backlog.md § Release site upload and signing).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the GitHub Release
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # goreleaser's changelog reads the tag history
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          distribution: goreleaser
+          version: v2.19.0
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
