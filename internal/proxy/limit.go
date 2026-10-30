@@ -16,15 +16,26 @@ const busyResponse = "HTTP/1.1 503 Service Unavailable\r\n" +
 	"Retry-After: 10\r\nConnection: close\r\n\r\n" +
 	`{"state":"busy"}`
 
+// busyBareResponse is busyResponse for an app with pages: bare: status and
+// headers only, like its other answers.
+const busyBareResponse = "HTTP/1.1 503 Service Unavailable\r\n" +
+	"Content-Length: 0\r\nCache-Control: no-store\r\nX-Robots-Tag: noindex\r\n" +
+	"Retry-After: 10\r\nConnection: close\r\n\r\n"
+
 // LimitListener accepts at most limit connections at once; the rest get
-// busyResponse and are closed.
-func LimitListener(l net.Listener, limit int) net.Listener {
-	return &limitListener{Listener: l, sem: make(chan struct{}, limit)}
+// the busy answer (bodiless when bare) and are closed.
+func LimitListener(l net.Listener, limit int, bare bool) net.Listener {
+	busy := busyResponse
+	if bare {
+		busy = busyBareResponse
+	}
+	return &limitListener{Listener: l, sem: make(chan struct{}, limit), busy: []byte(busy)}
 }
 
 type limitListener struct {
 	net.Listener
-	sem chan struct{}
+	sem  chan struct{}
+	busy []byte
 }
 
 func (l *limitListener) Accept() (net.Conn, error) {
@@ -39,7 +50,7 @@ func (l *limitListener) Accept() (net.Conn, error) {
 		default:
 			go func() {
 				_ = c.SetWriteDeadline(time.Now().Add(time.Second))
-				_, _ = c.Write([]byte(busyResponse))
+				_, _ = c.Write(l.busy)
 				c.Close()
 			}()
 		}

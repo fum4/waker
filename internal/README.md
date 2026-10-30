@@ -13,7 +13,7 @@ waker's packages. Dependencies point down this list. Nothing here is importable 
 | `memory` | The headroom curve, the need/required `Budget`, `MemAvailable`, process-tree RSS, systemd `MemoryPeak`. | config |
 | `app` | One app's runtime: effective mode, the boot state machine, `Wake`/`Tick`/`Stop`/`SetMode`, `Snapshot`. | idle, state, clock, memory |
 | `evict` | `Gate` (admission + eviction plan) implementing `app.Gate`. | app, memory |
-| `pages` | The visitor pages and assets (embedded Geist, logo, heartbeat.js). | config |
+| `pages` | The visitor pages (built-in, or the owner's files with placeholders filled) and assets (embedded Geist, logo, heartbeat.js, wait.js); `WithTag`, the one script-tag injector. | config |
 | `proxy` | The per-app HTTP front: forwarding, waking, `/__waker/*`, heartbeat injection, connection cap. | app, pages |
 | `control` | The unix-socket admin API and its client. | app |
 | `daemon` | `waker serve`: wires every app, listener, the gate, the sampler and the idle loop. | everything above |
@@ -22,4 +22,4 @@ waker's packages. Dependencies point down this list. Nothing here is importable 
 **Extending:**
 - A new memory source implements `memory.Available`.
 - A new peak source is a case in `daemon.recordPeak`.
-- A new visitor page is an entry in `pages.copyText`, plus the state that shows it.
+- A new visitor page is an entry in `pages.copyText` and `config.PageKeys` (a test keeps them equal), plus the state that shows it.

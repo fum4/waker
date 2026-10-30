@@ -32,7 +32,7 @@ const ShutdownTimeout = 5 * time.Second
 type Daemon struct {
 	cfg   *config.Config
 	log   *slog.Logger
-	pages map[string]*pages.Pages // per app: each has its own branding
+	pages map[string]*pages.Pages // per app: each has its own branding and page files
 	sig   idle.Signal
 	all   []*app.App
 	procs map[string]*boot.Process
@@ -53,7 +53,7 @@ func New(cfg *config.Config, log *slog.Logger) (*Daemon, error) {
 	d := &Daemon{cfg: cfg, log: log, pages: map[string]*pages.Pages{}, sig: idle.NewSignal(), skipped: map[string]string{},
 		procs: map[string]*boot.Process{}, avail: memory.NewMeminfo()}
 	for _, ac := range cfg.Apps {
-		pg, err := pages.New(ac.Branding)
+		pg, err := pages.New(ac)
 		if err != nil {
 			return nil, fmt.Errorf("app %s: %w", ac.Name, err)
 		}
@@ -136,7 +136,7 @@ func (d *Daemon) listen() []*http.Server {
 			continue
 		}
 		srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
-		go func() { _ = srv.Serve(proxy.LimitListener(ln, proxy.MaxConnections)) }()
+		go func() { _ = srv.Serve(proxy.LimitListener(ln, proxy.MaxConnections, ac.Pages.Bare)) }()
 		servers = append(servers, srv)
 		d.listening = append(d.listening, a)
 	}
