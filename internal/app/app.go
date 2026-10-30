@@ -41,10 +41,13 @@ type Process interface {
 }
 
 // Gate decides whether memory allows a boot. Admit returns ok=false to
-// refuse at once (busy); otherwise makeRoom, when non-nil, runs on the boot
-// goroutine before the start and returns false if it could not free enough.
+// refuse at once (busy); otherwise it holds a reservation for the app until
+// Release, and makeRoom, when non-nil, runs on the boot goroutine before the
+// start and returns false if it could not free enough.
 type Gate interface {
 	Admit(a *App) (makeRoom func() bool, ok bool)
+	// Release drops the reservation Admit took; called once the boot ends.
+	Release(a *App)
 }
 
 // Deps are an App's collaborators. Gate, Persist and OnStop may be nil.
@@ -67,6 +70,10 @@ type App struct {
 	d        Deps
 	activity *idle.Tracker
 	bg       sync.WaitGroup
+	// life serialises starting and stopping the process: a boot never starts
+	// while a stop of the previous process is still running.
+	life  sync.Mutex
+	cache stateCache
 
 	mu           sync.Mutex
 	override     *state.Override

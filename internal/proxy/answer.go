@@ -28,7 +28,7 @@ func (h *Handler) reserved(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	case name == "status":
 		// Visitors learn their app's state and nothing else.
-		writeJSON(w, r, http.StatusOK, map[string]string{"state": string(h.app.State(r.Context()))})
+		writeJSON(w, r, http.StatusOK, map[string]string{"state": string(h.app.VisitorState(r.Context()))})
 	case name == "font.woff2" && get:
 		write(w, r, http.StatusOK, "font/woff2", pages.Font(), cacheAsset)
 	case name == "heartbeat.js" && get:

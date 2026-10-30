@@ -21,7 +21,9 @@ func (a *App) Wake(ctx context.Context) State {
 	}
 	a.mu.Unlock()
 
-	if a.Healthy(ctx) {
+	// A stopping app may still answer health, but it is going down: boot
+	// anew (the boot waits for the stop) rather than report it up.
+	if !a.activity.Stopping() && a.Healthy(ctx) {
 		return Up
 	}
 
@@ -55,6 +57,9 @@ func (a *App) Wake(ctx context.Context) State {
 // boot runs on its own goroutine: make room, start, wait for health, then
 // settle the state. A mode switched to off meanwhile wins with a final stop.
 func (a *App) boot(makeRoom func() bool) {
+	if a.d.Gate != nil {
+		defer a.d.Gate.Release(a)
+	}
 	busy, errMsg := false, ""
 	func() {
 		defer func() {
@@ -100,7 +105,9 @@ func (a *App) boot(makeRoom func() bool) {
 // start launches the app and polls health until it answers, the start
 // command fails, or boot_timeout passes. It returns an error message or "".
 func (a *App) start() string {
+	a.life.Lock()
 	exit, err := a.d.Process.Start()
+	a.life.Unlock()
 	if err != nil {
 		return err.Error()
 	}

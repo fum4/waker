@@ -117,6 +117,11 @@ func (h *Handler) upstreamError(w http.ResponseWriter, r *http.Request, err erro
 		h.page(w, r, http.StatusBadGateway, pages.Down)
 		return
 	}
+	// The request may have waited out a mode-off stop: never wake an off app.
+	if h.app.Mode() == config.ModeOff {
+		h.page(w, r, http.StatusServiceUnavailable, pages.Offline)
+		return
+	}
 	if h.ignore[r.URL.Path] {
 		h.page(w, r, http.StatusServiceUnavailable, pages.Down)
 		return
