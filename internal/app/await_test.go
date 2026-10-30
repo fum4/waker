@@ -13,7 +13,7 @@ func TestAwaitBoot(t *testing.T) {
 		timeout time.Duration
 		want    State
 	}{
-		{"no boot: current state", func(t *testing.T, f *fixture) {}, time.Second, Down},
+		{"no boot: current state", func(t *testing.T, f *fixture) {}, time.Second, Asleep},
 		{"boot ends up", func(t *testing.T, f *fixture) { f.app.Wake(ctx) }, 5 * time.Second, Up},
 		{"boot fails", func(t *testing.T, f *fixture) { f.proc.exitErr = errExit; f.app.Wake(ctx) }, 5 * time.Second, Failed},
 		{"timeout: still starting", func(t *testing.T, f *fixture) {

@@ -12,8 +12,8 @@
    | anything else | 404. |
 
 2. **Mode `off`:** the offline page, with 503.
-3. **Otherwise the request is forwarded** to the upstream, streaming both ways. If the connection is refused, the app is down:
-   - an `idle_ignore` path gets the down state and doesn't wake it;
+3. **Otherwise the request is forwarded** to the upstream, streaming both ways. If the connection is refused, the app isn't running:
+   - an `idle_ignore` path gets the `asleep` state (or `down`, below) and the down page, and doesn't wake it;
    - anything else wakes it. A boot that is refused for memory gives busy, and one inside the failure cooldown gives failed. While it boots:
      - **a browser** gets the starting page at once (`waiting: page`, the default), or is held like a program (`waiting: hold`);
      - **a program** (anything that isn't a browser, see below) is always **held**: the request waits until the app is healthy, then is forwarded, body included. If the boot fails or is refused it gets that state. After `hold_timeout` (default 60 s), a held browser gets the failed page and a program gets 503 `{"state":"starting"}`; the boot carries on.
@@ -42,7 +42,8 @@ With [`pages: bare`](configuration.md#pages-per-app-or-in-defaults), every page 
 3. **failed:** the last boot failed. Its error is in `waker status`, never on the page.
 4. **busy:** the last boot was refused for memory.
 5. **offline:** mode is off.
-6. **down:** otherwise.
+6. **asleep:** an on-demand app that isn't running (e.g. after an idle stop); the next request wakes it. Visitors on an `idle_ignore` path get the down page.
+7. **down:** otherwise: an app that should be running (mode `on`, or inside a schedule window) but isn't.
 
 Boots are serialised per app: any number of concurrent requests share one boot. A failed boot answers "failed" for 120 s before a request may retry. Switching an app to `off` while it boots wins: when the boot ends, the app is stopped.
 

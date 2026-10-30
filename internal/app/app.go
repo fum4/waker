@@ -26,7 +26,9 @@ const (
 	Failed   State = "failed"
 	Busy     State = "busy"
 	Offline  State = "offline"
-	Down     State = "down"
+	// Asleep is an on-demand app that isn't running: the next request wakes it.
+	Asleep State = "asleep"
+	Down   State = "down"
 )
 
 // BootRetryCooldown is how long a failed boot answers "failed" before the
@@ -186,8 +188,10 @@ func (a *App) State(ctx context.Context) State {
 		return Busy
 	case mode == config.ModeOff:
 		return Offline
+	case mode == config.ModeOnDemand:
+		return Asleep
 	default:
-		return Down
+		return Down // mode on (or a schedule window), yet not running
 	}
 }
 

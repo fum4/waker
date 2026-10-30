@@ -51,7 +51,7 @@ func TestWakeThenProxy(t *testing.T) {
 func TestIgnoredPathNeverWakes(t *testing.T) {
 	l := newLive(t, nil)
 	resp, body := l.do(t, "GET", "/poll", nil)
-	if resp.StatusCode != 503 || body != `{"state":"down"}` || resp.Header.Get("Retry-After") != "10" {
+	if resp.StatusCode != 503 || body != `{"state":"asleep"}` || resp.Header.Get("Retry-After") != "10" {
 		t.Fatalf("= %d %q", resp.StatusCode, body)
 	}
 	if l.proc.starts.Load() != 0 {
@@ -62,7 +62,7 @@ func TestIgnoredPathNeverWakes(t *testing.T) {
 func TestVisitorsGetOnlyTheirAppsState(t *testing.T) {
 	l := newLive(t, nil)
 	resp, body := l.do(t, "GET", "/__waker/status", nil, "Accept", htmlAccept)
-	if resp.StatusCode != 200 || body != `{"state":"down"}` || resp.Header.Get("Cache-Control") != "no-store" {
+	if resp.StatusCode != 200 || body != `{"state":"asleep"}` || resp.Header.Get("Cache-Control") != "no-store" {
 		t.Fatalf("status = %d %q", resp.StatusCode, body)
 	}
 	if resp, _ = l.do(t, "GET", "/__waker/health", nil); resp.StatusCode != 404 {
@@ -108,7 +108,7 @@ func TestModeOffAnswersOffline(t *testing.T) {
 func TestAbsoluteFormTargetIsStillReserved(t *testing.T) {
 	l := newLive(t, nil)
 	got := l.raw(t, "GET http://shop/__waker/status HTTP/1.1\r\nHost: shop\r\nConnection: close\r\n\r\n")
-	if !strings.HasPrefix(got, "200") || !strings.Contains(got, `{"state":"down"}`) || l.proc.starts.Load() != 0 {
+	if !strings.HasPrefix(got, "200") || !strings.Contains(got, `{"state":"asleep"}`) || l.proc.starts.Load() != 0 {
 		t.Fatalf("= %q", got)
 	}
 }

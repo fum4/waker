@@ -126,7 +126,11 @@ func (h *Handler) upstreamError(w http.ResponseWriter, r *http.Request, err erro
 		return
 	}
 	if h.ignore[r.URL.Path] {
-		h.page(w, r, http.StatusServiceUnavailable, pages.Down)
+		st := app.Down
+		if h.app.Mode() == config.ModeOnDemand {
+			st = app.Asleep
+		}
+		h.page(w, r, http.StatusServiceUnavailable, string(st))
 		return
 	}
 	st := h.app.Wake(r.Context())

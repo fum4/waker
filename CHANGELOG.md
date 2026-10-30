@@ -12,6 +12,7 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
   - an `idle_ignore` list;
   - one boot at a time per app, with a 120 s failure cooldown.
 - Visitor pages (starting, offline, busy, failed, down) with an embedded Geist font, plus per-app `branding.logo` / `accent` / `name`. The starting page polls `/__waker/status` and opens the app by itself.
+- `asleep` state: an on-demand app stopped for idleness shows `asleep` in `waker status` and `/__waker/status`; `down` now means an app that should be running but isn't.
 - `pages:` per app (or in `defaults`): your own HTML file per visitor page (`{{name}}`, `{{logo}}`, `{{accent}}` filled in; `/__waker/wait.js` injected into a custom starting page), or `pages: bare` for status and headers only.
 - Programs (non-browser requests) are held through a cold boot and forwarded once the app is healthy; `waiting: hold` holds browsers too, `hold_timeout` bounds the wait.
 - Heartbeat injection into HTML pages, so a reader keeps an on-demand app awake.

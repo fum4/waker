@@ -179,7 +179,7 @@ func TestLifecycle(t *testing.T) {
 	}
 	h := setup(t)
 	waker := h.serve()
-	if h.state() != "down" || h.appUp() {
+	if h.state() != "asleep" || h.appUp() {
 		t.Fatal("an on-demand app must not start until visited")
 	}
 
@@ -202,7 +202,7 @@ func TestLifecycle(t *testing.T) {
 	if took := time.Since(last); took < 2*time.Second {
 		t.Fatalf("stopped %s after the last request, before its 2s idle", took)
 	}
-	if st := h.state(); st != "down" {
+	if st := h.state(); st != "asleep" {
 		t.Fatalf("after idle stop state = %s", st)
 	}
 

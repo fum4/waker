@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/fum4/waker/internal/app"
 	"github.com/fum4/waker/internal/pages"
 )
 
@@ -51,7 +52,13 @@ func (h *Handler) page(w http.ResponseWriter, r *http.Request, status int, page 
 		return
 	}
 	if wantsHTML(r) {
-		body, err := h.pages.Render(page)
+		html := page
+		if page == string(app.Asleep) {
+			// A visitor reaches an asleep app only on an idle_ignore path,
+			// which never wakes it: the "isn't running" page fits.
+			html = pages.Down
+		}
+		body, err := h.pages.Render(html)
 		if err == nil {
 			write(w, r, status, "text/html; charset=utf-8", body, cacheNone)
 			return
