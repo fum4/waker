@@ -2,7 +2,7 @@
 // only the waker's user can open (dir 0700, socket 0600). `waker status`,
 // `waker mode` and `waker reset` are its clients.
 //
-//	GET  /status  → [Snapshot, …]
+//	GET  /status  → {"policy": {...}, "apps": [Snapshot, …]}
 //	GET  /health  → {"listeners": [...], "skipped": {name: reason}}
 //	POST /mode    {app, mode, idle?} | {app, reset: true} → Snapshot
 package control
@@ -26,11 +26,25 @@ import (
 
 // Backend is what the control API drives (the daemon).
 type Backend interface {
-	Status(ctx context.Context) []app.Snapshot
+	Status(ctx context.Context) Report
 	Health() Health
 	// SetMode applies or (mode nil) resets an override. It returns an
 	// *app.InputError for bad input and a *NotFoundError for an unknown app.
 	SetMode(name string, mode *config.Mode, idle time.Duration) (app.Snapshot, error)
+}
+
+// Report is GET /status: the effective memory policy and every app.
+type Report struct {
+	Policy Policy         `json:"policy"`
+	Apps   []app.Snapshot `json:"apps"`
+}
+
+// Policy is the effective resource policy, as status shows it.
+type Policy struct {
+	Headroom     string `json:"headroom"`
+	ReserveMiB   int64  `json:"reserve_mib"`
+	Eviction     string `json:"eviction"`
+	AvailableMiB *int64 `json:"available_mib"`
 }
 
 // Health lists which apps got their listener.

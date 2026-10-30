@@ -81,7 +81,7 @@ type App struct {
 // Eviction records the last time another app stopped this one for memory.
 type Eviction struct {
 	By       string    `json:"by"`
-	Priority int       `json:"priority"`
+	Priority float64   `json:"priority"`
 	At       time.Time `json:"at"`
 }
 
@@ -106,7 +106,7 @@ func (a *App) Config() config.App { return a.cfg }
 func (a *App) Name() string { return a.cfg.Name }
 
 // Priority returns the app's priority (1 lowest … 10 highest).
-func (a *App) Priority() int { return a.cfg.Priority }
+func (a *App) Priority() float64 { return a.cfg.Priority }
 
 // Mode returns the effective mode: the override's, else the declared one.
 func (a *App) Mode() config.Mode {

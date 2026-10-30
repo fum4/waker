@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,16 +35,34 @@ func TestValidateNamesTheField(t *testing.T) {
 		{"no start", func(c *Config) { c.Apps[0].Start = nil }, ".start"},
 		{"empty stop", func(c *Config) { c.Apps[0].Stop = []string{""} }, ".stop"},
 		{"bad mode", func(c *Config) { c.Apps[0].Mode = "sometimes" }, ".mode"},
-		{"priority low", func(c *Config) { c.Apps[0].Priority = -1 }, ".priority: -1 must be 1–10"},
-		{"priority high", func(c *Config) { c.Apps[0].Priority = 11 }, ".priority: 11 must be 1–10"},
+		{"priority low", func(c *Config) { c.Apps[0].Priority = -1 }, ".priority: -1 must be a number from 1 to 10"},
+		{"priority high", func(c *Config) { c.Apps[0].Priority = 10.5 }, ".priority: 10.5 must be a number from 1 to 10"},
 		{"negative memory", func(c *Config) { c.Apps[0].Memory = -1 }, ".memory"},
 		{"ignore not a path", func(c *Config) { c.Apps[0].IdleIgnore = []string{"health"} }, ".idle_ignore[0]"},
 		{"health both", func(c *Config) { c.Apps[0].Health.Command = []string{"true"} }, ".health: set path or command"},
 		{"health path", func(c *Config) { c.Apps[0].Health.Path = "healthz" }, ".health.path"},
-		{"systemd no unit", func(c *Config) { c.Apps[0].Peak.Source = PeakSystemd }, ".peak.unit: is required"},
-		{"unit without systemd", func(c *Config) { c.Apps[0].Peak.Unit = "x.service" }, ".peak.unit: only applies"},
-		{"bad peak source", func(c *Config) { c.Apps[0].Peak.Source = "cgroup" }, ".peak.source"},
-		{"headroom order", func(c *Config) { c.MinHeadroom = 8 * GiB }, "min_headroom: 8GiB exceeds"},
+		{"systemd no unit", func(c *Config) { c.Apps[0].MemorySource = MemorySystemd }, ".systemd_unit: is required"},
+		{"unit without systemd", func(c *Config) { c.Apps[0].SystemdUnit = "x.service" }, ".systemd_unit: only applies"},
+		{"bad memory source", func(c *Config) { c.Apps[0].MemorySource = "cgroup" }, ".memory_source"},
+		{"headroom order", func(c *Config) { c.Resources.Headroom.Min = 8 * GiB }, "resources.headroom.min: 8GiB exceeds"},
+		{"nan priority", func(c *Config) { c.Apps[0].Priority = math.NaN() }, ".priority: NaN must be"},
+		{"inf priority", func(c *Config) { c.Apps[0].Priority = math.Inf(1) }, ".priority: +Inf must be"},
+		{"negative app headroom", func(c *Config) { c.Apps[0].Headroom = -1 }, ".headroom: must not be negative"},
+		{"bad curve", func(c *Config) { c.Resources.Headroom.Curve = "cubic" }, "resources.headroom.curve"},
+		{"table missing", func(c *Config) {
+			c.Resources.Headroom = Headroom{Curve: CurveTable, Table: map[int]Size{1: MiB}}
+		}, "resources.headroom.table: needs a value for every priority 1–10 (missing 2)"},
+		{"table key out of range", func(c *Config) {
+			c.Resources.Headroom = Headroom{Curve: CurveTable, Table: map[int]Size{}}
+			for p := 0; p <= 10; p++ {
+				c.Resources.Headroom.Table[p] = MiB
+			}
+		}, "priority 0 is outside 1–10"},
+		{"fixed without value", func(c *Config) { c.Resources.Headroom.Curve = CurveFixed }, "resources.headroom.value: is required"},
+		{"bad policy", func(c *Config) { c.Resources.Eviction.Policy = "random" }, "resources.eviction.policy"},
+		{"bad order", func(c *Config) { c.Resources.Eviction.Order = "random" }, "resources.eviction.order"},
+		{"protect unknown", func(c *Config) { c.Resources.Eviction.Protect = []string{"ghost"} }, `resources.eviction.protect: [0] "ghost" is not a configured app`},
+		{"other available source", func(c *Config) { c.Resources.AvailableSource = "vm_stat" }, "resources.available_source"},
 		{"bad accent", func(c *Config) { c.Branding.Accent = "lime" }, "branding.accent"},
 		{"logo ext", func(c *Config) { c.Branding.Logo = "/tmp/logo.gif" }, "branding.logo: /tmp/logo.gif must be"},
 		{"logo missing", func(c *Config) { c.Branding.Logo = "/nonexistent/logo.svg" }, "branding.logo:"},

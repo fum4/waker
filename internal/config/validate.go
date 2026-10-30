@@ -23,12 +23,6 @@ func (c *Config) Validate() error {
 	add := func(field, format string, args ...any) {
 		errs = append(errs, fmt.Errorf("%s: %s", field, fmt.Sprintf(format, args...)))
 	}
-	if c.MinHeadroom < 0 || c.MaxHeadroom < 0 {
-		add("max_headroom", "headroom must not be negative")
-	}
-	if c.MinHeadroom > c.MaxHeadroom {
-		add("min_headroom", "%s exceeds max_headroom %s", c.MinHeadroom, c.MaxHeadroom)
-	}
 	c.Branding.validate(add)
 	if len(c.Apps) == 0 {
 		add("apps", "at least one app is required")
@@ -49,6 +43,7 @@ func (c *Config) Validate() error {
 		}
 		listens[a.Listen] = i
 	}
+	c.Resources.validate(names, add)
 	return errors.Join(errs...)
 }
 
@@ -104,8 +99,12 @@ func (a App) validate(field string, add addFunc) {
 	if a.Memory < 0 {
 		add(field+".memory", "must not be negative")
 	}
-	if a.Priority < MinPriority || a.Priority > MaxPriority {
-		add(field+".priority", "%d must be %d–%d", a.Priority, MinPriority, MaxPriority)
+	// The negated range test also rejects NaN, which fails every comparison.
+	if !(a.Priority >= MinPriority && a.Priority <= MaxPriority) {
+		add(field+".priority", "%g must be a number from %g to %g", a.Priority, MinPriority, MaxPriority)
+	}
+	if a.Headroom < 0 {
+		add(field+".headroom", "must not be negative")
 	}
 	if a.BootTimeout <= 0 {
 		add(field+".boot_timeout", "must be positive")
@@ -114,7 +113,7 @@ func (a App) validate(field string, add addFunc) {
 		add(field+".stop_timeout", "must be positive")
 	}
 	a.Health.validate(field+".health", add)
-	a.Peak.validate(field+".peak", add)
+	a.validateMemorySource(field, add)
 }
 
 func (h Health) validate(field string, add addFunc) {
@@ -134,17 +133,17 @@ func (h Health) validate(field string, add addFunc) {
 	}
 }
 
-func (p Peak) validate(field string, add addFunc) {
-	switch p.Source {
-	case PeakProcTree, PeakNone:
-		if p.Unit != "" {
-			add(field+".unit", "only applies to source: systemd")
+func (a App) validateMemorySource(field string, add addFunc) {
+	switch a.MemorySource {
+	case MemoryProcTree, MemoryNone:
+		if a.SystemdUnit != "" {
+			add(field+".systemd_unit", "only applies to memory_source: systemd")
 		}
-	case PeakSystemd:
-		if p.Unit == "" {
-			add(field+".unit", "is required for source: systemd")
+	case MemorySystemd:
+		if a.SystemdUnit == "" {
+			add(field+".systemd_unit", "is required for memory_source: systemd")
 		}
 	default:
-		add(field+".source", "%q must be proctree, systemd or none", p.Source)
+		add(field+".memory_source", "%q must be proctree, systemd or none", a.MemorySource)
 	}
 }

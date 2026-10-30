@@ -32,8 +32,8 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.MaxHeadroom != 5120*MiB || cfg.MinHeadroom != 512*MiB {
-		t.Errorf("headroom = %s/%s, want 5GiB/512MiB", cfg.MaxHeadroom, cfg.MinHeadroom)
+	if h := cfg.Resources.Headroom; h.Curve != CurveLinear || h.Max != 5120*MiB || h.Min != 512*MiB || !cfg.Resources.Eviction.Enabled || cfg.Resources.Eviction.Policy != EvictLower {
+		t.Errorf("resources defaults = %+v", cfg.Resources)
 	}
 	home, _ := os.UserHomeDir()
 	if want := filepath.Join(home, ".local/state/waker"); cfg.StateDir != want {
@@ -53,7 +53,7 @@ func TestLoadAppliesDefaults(t *testing.T) {
 		{"heartbeat", a.HeartbeatEnabled()},
 		{"boot_timeout", a.BootTimeout.D() == 600*time.Second},
 		{"health.path", a.Health.Path == "/"},
-		{"peak.source", a.Peak.Source == PeakProcTree},
+		{"memory_source", a.MemorySource == MemoryProcTree && a.IsEvictable()},
 	}
 	for _, c := range checks {
 		if !c.ok {
@@ -96,8 +96,7 @@ apps:
 
 func TestLoadExplicitValues(t *testing.T) {
 	cfg, err := Load(writeConfig(t, `
-max_headroom: 2GiB
-min_headroom: 256MiB
+resources: {headroom: {max: 2GiB, min: 256MiB}}
 apps:
   - name: web
     listen: 127.0.0.1:8080
@@ -106,17 +105,18 @@ apps:
     mode: "on"
     idle: 10s
     memory: 768MiB
-    priority: 2
+    priority: 2.5
     heartbeat: false
     health: {command: ["true"]}
-    peak: {source: systemd, unit: web.service}
+    memory_source: systemd
+    systemd_unit: web.service
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
 	a := cfg.Apps[0]
-	if cfg.MaxHeadroom != 2*GiB || a.Idle.D() != 10*time.Second || a.Memory != 768*MiB ||
-		a.Priority != 2 || a.HeartbeatEnabled() || a.Mode != ModeOn || a.Health.Path != "" {
+	if cfg.Resources.Headroom.Max != 2*GiB || a.Idle.D() != 10*time.Second || a.Memory != 768*MiB ||
+		a.Priority != 2.5 || a.HeartbeatEnabled() || a.Mode != ModeOn || a.Health.Path != "" {
 		t.Fatalf("explicit values not kept: %+v", a)
 	}
 }

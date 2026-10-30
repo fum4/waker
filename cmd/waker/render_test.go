@@ -8,6 +8,8 @@ import (
 
 	"github.com/fum4/waker/internal/app"
 	"github.com/fum4/waker/internal/config"
+	"github.com/fum4/waker/internal/control"
+	"github.com/fum4/waker/internal/memory"
 )
 
 func TestRenderStatus(t *testing.T) {
@@ -18,7 +20,7 @@ func TestRenderStatus(t *testing.T) {
 		Name: "shop", Listen: "127.0.0.1:8080", Upstream: "http://127.0.0.1:3000",
 		Mode: config.ModeOnDemand, Idle: config.Duration(10 * time.Second),
 		DeclaredMode: config.ModeOff, DeclaredIdle: config.Duration(30 * time.Minute),
-		OverrideSince: &since, State: app.Up, Priority: 5, Heartbeat: true,
+		OverrideSince: &since, State: app.Up, Priority: 7.5, Heartbeat: true,
 		LastActivity: now.Add(-time.Second), IdleIn: &idleIn,
 		Evicted: &app.Eviction{By: "top", Priority: 10, At: now.Add(-2 * time.Hour)},
 	}
@@ -29,7 +31,7 @@ func TestRenderStatus(t *testing.T) {
 		"  mode:      on-demand, idle 10s (override, set 3m ago; declared off)\n",
 		"  state:     up\n",
 		"  activity:  1s ago · idle stop in 9s\n",
-		"  priority:  5 · last evicted by top (p10) 2h ago\n",
+		"  priority:  7.5 · last evicted by top (p10) 2h ago\n",
 		"  heartbeat: injected into its pages\n",
 	} {
 		if !strings.Contains(buf.String(), want) {
@@ -43,6 +45,32 @@ func TestRenderStatus(t *testing.T) {
 		if !strings.Contains(buf.String(), want) {
 			t.Errorf("missing %q in:\n%s", want, buf.String())
 		}
+	}
+}
+
+func TestMemoryAndPolicyLines(t *testing.T) {
+	learned, declared := int64(900), int64(800)
+	tests := []struct {
+		m    memory.Breakdown
+		want string
+	}{
+		{memory.Breakdown{NeedMiB: 1024, HeadroomMiB: 2844, HeadroomFrom: "linear p5", RequiredMiB: 3868},
+			"need 1024 + headroom(linear p5) 2844 = 3868 MiB required to boot (need: the default, nothing declared or learned)"},
+		{memory.Breakdown{DeclaredMiB: &declared, LearnedMiB: &learned, NeedMiB: 900, HeadroomMiB: 100, HeadroomFrom: "app", ReserveMiB: 256, RequiredMiB: 1256},
+			"need 900 + headroom(app) 100 + reserve 256 = 1256 MiB required to boot (need = max(declared 800, learned 900))"},
+		{memory.Breakdown{LearnedMiB: &learned, NeedMiB: 900, HeadroomMiB: 1422, HeadroomFrom: "linear p7.5", RequiredMiB: 2322},
+			"(need = max(declared none, learned 900))"},
+	}
+	for _, tt := range tests {
+		if got := memoryText(tt.m); !strings.Contains(got, tt.want) {
+			t.Errorf("memoryText = %q, want %q", got, tt.want)
+		}
+	}
+	var buf bytes.Buffer
+	avail := int64(8000)
+	renderPolicy(&buf, control.Policy{Headroom: "linear max 5GiB, min 512MiB", Eviction: "lower-priority, priority-then-idle", AvailableMiB: &avail})
+	if want := "memory policy — headroom linear max 5GiB, min 512MiB · reserve 0 MiB · eviction lower-priority, priority-then-idle · available 8000 MiB\n"; buf.String() != want {
+		t.Fatalf("policy = %q", buf.String())
 	}
 }
 

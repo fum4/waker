@@ -20,30 +20,27 @@ func (m Mode) Valid() bool {
 	return m == ModeOn || m == ModeOff || m == ModeOnDemand
 }
 
-// PeakSource names where an app's learned memory peak comes from.
-type PeakSource string
+// MemorySource names where an app's learned memory peak comes from.
+type MemorySource string
 
 const (
-	// PeakProcTree samples the RSS of the process tree the waker started.
-	PeakProcTree PeakSource = "proctree"
-	// PeakSystemd reads MemoryPeak of a systemd unit.
-	PeakSystemd PeakSource = "systemd"
-	// PeakNone disables learning; only the declared memory counts.
-	PeakNone PeakSource = "none"
+	// MemoryProcTree samples the RSS of the process tree the waker started.
+	MemoryProcTree MemorySource = "proctree"
+	// MemorySystemd reads MemoryPeak of a systemd unit.
+	MemorySystemd MemorySource = "systemd"
+	// MemoryNone disables learning; only the declared memory counts.
+	MemoryNone MemorySource = "none"
 )
 
 // Config is a whole waker configuration.
 type Config struct {
-	// MaxHeadroom is the headroom a priority-1 app must leave free.
-	MaxHeadroom Size `yaml:"max_headroom"`
-	// MinHeadroom is the floor of the headroom formula (priority 10).
-	MinHeadroom Size `yaml:"min_headroom"`
 	// StateDir holds mode overrides and learned memory peaks.
 	StateDir string `yaml:"state_dir"`
 	// ControlSocket is the unix socket the CLI talks to.
-	ControlSocket string   `yaml:"control_socket"`
-	Branding      Branding `yaml:"branding"`
-	Apps          []App    `yaml:"apps"`
+	ControlSocket string    `yaml:"control_socket"`
+	Resources     Resources `yaml:"resources"`
+	Branding      Branding  `yaml:"branding"`
+	Apps          []App     `yaml:"apps"`
 }
 
 // Branding customises the pages visitors see while an app is not up.
@@ -73,16 +70,29 @@ type App struct {
 	Mode        Mode              `yaml:"mode"`
 	Idle        Duration          `yaml:"idle"`
 	IdleIgnore  []string          `yaml:"idle_ignore"`
-	Memory      Size              `yaml:"memory"`
-	Priority    int               `yaml:"priority"`
+	// Memory is the declared need; the learned peak raises it.
+	Memory Size `yaml:"memory"`
+	// MemorySource is where the learned peak comes from; SystemdUnit names
+	// the unit when it is systemd.
+	MemorySource MemorySource `yaml:"memory_source"`
+	SystemdUnit  string       `yaml:"systemd_unit"`
+	// Headroom, when set, replaces the curve's headroom for this app.
+	Headroom Size `yaml:"headroom"`
+	// PriorityRaw is the file's value (nil = omitted); read Priority.
+	PriorityRaw *float64 `yaml:"priority"`
+	Priority    float64  `yaml:"-"`
+	// Evictable false protects the app from eviction (default true).
+	Evictable *bool `yaml:"evictable"`
 	// Heartbeat is a pointer so an omitted key can default to true.
 	Heartbeat   *bool    `yaml:"heartbeat"`
 	BootTimeout Duration `yaml:"boot_timeout"`
-	Peak        Peak     `yaml:"peak"`
 }
 
 // HeartbeatEnabled reports whether heartbeat injection is on for the app.
 func (a App) HeartbeatEnabled() bool { return a.Heartbeat == nil || *a.Heartbeat }
+
+// IsEvictable reports whether the app's own config allows evicting it.
+func (a App) IsEvictable() bool { return a.Evictable == nil || *a.Evictable }
 
 // Health is how the waker decides an app is up: an HTTP GET of Path on the
 // upstream answering below 400 (redirects count as up), or Command exiting 0.
@@ -93,28 +103,19 @@ type Health struct {
 	Timeout  Duration `yaml:"timeout"`
 }
 
-// Peak configures learning an app's memory peak.
-type Peak struct {
-	Source PeakSource `yaml:"source"`
-	// Unit is the systemd unit name, required when Source is systemd.
-	Unit string `yaml:"unit"`
-}
-
 // Defaults applied by Load to keys the file leaves out.
 const (
-	DefaultMaxHeadroom    = 5120 * MiB
-	DefaultMinHeadroom    = 512 * MiB
 	DefaultMode           = ModeOnDemand
 	DefaultIdle           = 30 * time.Minute
-	DefaultPriority       = 5
+	DefaultPriority       = 5.0
 	DefaultBootTimeout    = 600 * time.Second
 	DefaultStopTimeout    = 10 * time.Second
 	DefaultHealthPath     = "/"
 	DefaultHealthInterval = time.Second
+	DefaultHealthTimeout  = 2 * time.Second
+	DefaultMemorySource   = MemoryProcTree
 	// DefaultNeed is the memory need of an app with nothing declared or learned.
-	DefaultNeed          = 1024 * MiB
-	DefaultHealthTimeout = 2 * time.Second
-	DefaultPeakSource    = PeakProcTree
-	MinPriority          = 1
-	MaxPriority          = 10
+	DefaultNeed = 1024 * MiB
+	MinPriority = 1.0
+	MaxPriority = 10.0
 )
