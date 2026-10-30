@@ -2,7 +2,7 @@
 
 Scale-to-zero for self-hosted apps: waker starts an app on its first request and stops it when nobody uses it.
 
-Install one binary (about 16 MB on linux/amd64, needing only libc), point a few lines of YAML at your app, and run it. No containers, no database, no external services: any app that starts from a command works.
+Install one static binary (about 11 MB for linux/amd64), point a few lines of YAML at your app, and run it. No containers, no database, no external services: any app that starts from a command works.
 
 ## Quickstart
 
