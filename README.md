@@ -270,6 +270,25 @@ It never overwrites an existing config without `--force`. `--start` is split lik
 - **Ownership.** Every file carries a "Written by `waker service install`" marker. install never overwrites a unit you wrote yourself, and uninstall never removes one, without `--force`.
 - **Elsewhere** (no systemd, other OSes) install refuses and prints the command, PATH and restart policy to set up by hand.
 
+### Provisioning (non-interactive)
+
+For a provisioning script (Ansible, cloud-init, a dotfiles hook) that already writes `waker.yaml`, these steps are safe to re-run:
+
+```sh
+# 1. Install a pinned release (signature and checksum verified; never prompts).
+curl -fsSL https://releases.nomadware.io/waker/install.sh | sh -s -- --version vX.Y.Z --no-setup
+# 2. Write and enable the unit. It refuses an invalid config (`waker check` names the field)
+#    and doesn't start or restart anything.
+waker service install --config /abs/path/waker.yaml --path "$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" --no-start
+# 3. Apply the new binary, unit and config to a running waker; a waker you stopped stays stopped.
+systemctl --user try-restart waker    # or `start`, to bring it up now
+```
+
+- **`--path`** pins a clean PATH holding your `start` / `stop` commands. Without it the unit gets the script's PATH, which may hold directories that don't outlive the run.
+- **Linger.** A user unit runs at boot only with linger on: run `sudo loginctl enable-linger <user>` once, as part of provisioning.
+- **Replacing a hand-written unit.** install refuses a `waker.service` it didn't write. Run step 2 once with `--force`, then never again: from then on the refusal protects against clobbering.
+- **Upgrades.** Bump the version in step 1 and re-run all three steps. The upgrade restarts waker, and that restart stops the apps it started; the next request starts them again.
+
 ## What it does
 
 - **On a visit** to the quickstart's http://127.0.0.1:8080, waker starts the app. A browser sees a starting page that opens the app once its health check passes; a program (curl, an API client, a webhook) is held and answered by the app itself.
