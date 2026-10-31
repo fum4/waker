@@ -4,6 +4,8 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-31
+
 ### Added
 - `waker check`: a `mode` of `true`/`yes` or `false`/`no` says to write `on` or `off`, since a YAML 1.1 tool may have rewritten them. Bare `on`/`off` were always fine (YAML 1.2); the docs no longer say to quote them.
 - `waker init`: writes a `waker.yaml` for one app. On a terminal it prompts for name, listen address (default `0.0.0.0:8080`), app port, start command, health path and idle time, then runs `waker check` and offers to install the service. `--yes` plus flags runs it without a terminal. It never overwrites a config without `--force`.

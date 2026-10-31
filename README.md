@@ -14,6 +14,8 @@ Install one static binary (about 11 MB for linux/amd64), point a few lines of YA
 curl -fsSL https://releases.nomadware.io/waker/install.sh | sh
 ```
 
+On a terminal the installer then asks **Set up waker now? [Y/n]**: yes runs `waker setup` (steps 2 and 4 below in one go). In CI, with `--no-setup`, or without a terminal, it prints the next command instead.
+
 **2. Configure**: `waker init` asks for the app's name, ports, start command, health path and idle time, then writes `waker.yaml` and checks it. Or write the file yourself:
 
 ```yaml
