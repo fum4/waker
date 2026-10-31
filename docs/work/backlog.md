@@ -20,3 +20,9 @@ Engineering follow-ups, newest last. Heading: `## <title> · <YYYY-MM-DD> · S|M
 - **Why deferred:** the ruleset PR keeps off `.github/` workflows.
 - **First step:** `install_args: go staticcheck` on the four jobs' `mise-action` step; add `mise run tf:check` to the `lint` job (installing terraform there only).
 
+## Startup self-heal on launchd · 2026-10-31 · M
+
+- **What:** on macOS an edited `service:` block applies only through `waker restart` or `waker service install`; a crash restart or a `launchctl kickstart` runs the old job. `waker serve` self-heals systemd units only.
+- **Why deferred:** launchd caches the job at `bootstrap`, and reloading it (`bootout` + `bootstrap`) from inside the job kills the process doing it; rewriting just the plist would also hide the drift warning while the old job runs.
+- **First step:** prototype a detached helper (`launchctl bootout` + `bootstrap` run via `launchctl submit` or a double-fork) and check that `KeepAlive` doesn't race it.
+
