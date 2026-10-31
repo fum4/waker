@@ -34,7 +34,31 @@ func (a Answers) Render() []byte {
 	writeBlock(&b, "      ", "      ", []line{
 		{"path", scalar(a.HealthPath), "up = a GET below 400"},
 	})
+	b.WriteString(serviceBlock(a.ServicePath))
 	return []byte(b.String())
+}
+
+// serviceBlock is the service: section, commented out with every default
+// visible: uncomment a key to change it, then `waker service install`.
+func serviceBlock(path string) string {
+	var b strings.Builder
+	b.WriteString("\n# How `waker service install` runs waker. Every key is optional; these are\n")
+	b.WriteString("# the defaults. Uncomment to change one, then run `waker service install`.\n")
+	b.WriteString("# service:\n")
+	var rows strings.Builder
+	writeBlock(&rows, "  ", "  ", []line{
+		{"restart", "always", "always | on-failure | never (your own supervisor)"},
+		{"path", path, ""}, // where start/stop are found; too long to align a comment after
+		{"system", "false", "true: a system service (root) instead of a user one"},
+		{"start", "true", "false: install and enable without (re)starting"},
+		{"env", "{}", "extra environment, e.g. {NODE_ENV: production}"},
+		{"user", `""`, "system: true only; default: the installing user"},
+	})
+	for _, r := range strings.SplitAfter(strings.TrimSuffix(rows.String(), "\n"), "\n") {
+		b.WriteString("#" + r)
+	}
+	b.WriteString("\n")
+	return b.String()
 }
 
 // writeBlock pads keys to the block's longest, and comments to the longest

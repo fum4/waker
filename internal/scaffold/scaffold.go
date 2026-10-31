@@ -26,6 +26,9 @@ type Answers struct {
 	Start        []string
 	HealthPath   string
 	Idle         string // a Go duration
+	// ServicePath is service.path's default on this platform, shown in the
+	// commented service: block.
+	ServicePath string
 }
 
 // Defaults for every answer but Start, which has none. Idle is the

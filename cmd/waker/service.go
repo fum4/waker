@@ -36,12 +36,9 @@ func runService(args []string, stdout, stderr io.Writer) error {
 
 func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	fs, cfgFlag := newFlagSet("service install", stderr)
-	system := fs.Bool("system", false, "install a system service (root) instead of a user one")
 	dryRun := fs.Bool("dry-run", false, "print the unit and the commands; change nothing")
-	runAs := fs.String("run-as", "", "--system: the account waker runs as (default $SUDO_USER, else you)")
-	path := fs.String("path", os.Getenv("PATH"), "the service's PATH (default: this shell's)")
 	force := fs.Bool("force", false, "overwrite a unit that install didn't write")
-	noStart := fs.Bool("no-start", false, "install and enable it, but don't start or restart it (a running waker keeps the old unit until restarted)")
+	sf := addServiceFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -56,20 +53,17 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	bin, err := os.Executable()
+	settings, err := sf.apply(cfg.Service)
 	if err != nil {
-		return fmt.Errorf("find the waker binary: %w", err)
+		return fmt.Errorf("%w: %v", errUsage, err)
 	}
 	h, err := currentHost()
 	if err != nil {
 		return err
 	}
-	sp := service.Spec{Binary: bin, Config: cfgPath, WorkDir: filepath.Dir(cfgPath), PATH: *path, System: *system, RunAs: *runAs, NoStart: *noStart}
-	if sp.System && sp.RunAs == "" {
-		sp.RunAs = os.Getenv("SUDO_USER")
-		if sp.RunAs == "" {
-			sp.RunAs = h.User
-		}
+	sp, err := serviceSpec(settings, cfgPath, h)
+	if err != nil {
+		return err
 	}
 	plan, err := service.PlanInstall(h, sp)
 	if errors.Is(err, service.ErrUnsupported) {
@@ -87,10 +81,11 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 	if sp.System && h.EUID != 0 {
-		argv := []string{"sudo", bin, "service", "install", "--system", "--config", cfgPath, "--run-as", sp.RunAs, "--path", sp.PATH}
-		if sp.NoStart {
-			argv = append(argv, "--no-start")
-		}
+		// The same flags (the file holds the rest); the last --config wins,
+		// made absolute for root's working directory. --run-as pins you,
+		// whom sudo would otherwise hide.
+		argv := append([]string{"sudo", sp.Binary, "service", "install"}, args...)
+		argv = append(argv, "--run-as", sp.RunAs, "--config", cfgPath)
 		return fmt.Errorf("a system service needs root; run:\n  %s", service.ShellJoin(argv))
 	}
 	if !sp.System && h.EUID == 0 && h.OS == "linux" {
@@ -105,8 +100,8 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 }
 
 func runServiceUninstall(args []string, stdout, stderr io.Writer) error {
-	fs := newBareFlagSet("service uninstall", stderr)
-	system := fs.Bool("system", false, "remove the system service instead of the user one")
+	fs, cfgFlag := newFlagSet("service uninstall", stderr)
+	system := fs.Bool("system", false, "remove the system service instead of the user one (default: service.system)")
 	dryRun := fs.Bool("dry-run", false, "print the commands; change nothing")
 	force := fs.Bool("force", false, "remove the unit even if install didn't write it")
 	if err := fs.Parse(args); err != nil {
@@ -114,6 +109,13 @@ func runServiceUninstall(args []string, stdout, stderr io.Writer) error {
 	}
 	if fs.NArg() > 0 {
 		return fmt.Errorf("%w: unexpected argument %q", errUsage, fs.Arg(0))
+	}
+	// The scope is the file's unless --system says otherwise; a missing or
+	// broken config never blocks an uninstall (the flag still works).
+	if !flagGiven(fs, "system") {
+		if cfg, err := config.Load(config.ResolvePath(*cfgFlag)); err == nil {
+			*system = cfg.Service.System
+		}
 	}
 	h, err := currentHost()
 	if err != nil {

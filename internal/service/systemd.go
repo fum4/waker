@@ -101,11 +101,11 @@ func (s systemd) lingerLine() string {
 	return ShellJoin([]string{"sudo", "loginctl", "enable-linger", s.h.User})
 }
 
-// renderUnit writes the unit. waker fronts every app, so it must stay up:
-// Restart=always brings it back after any exit systemd didn't ask for, and
-// StartLimitIntervalSec=0 keeps a crash loop (a port still held) from
-// leaving it dead for good; RestartSec bounds the churn. A stop through
-// systemctl stays stopped.
+// renderUnit writes the unit. waker fronts every app, so by default it
+// must stay up: Restart=always (service.restart) brings it back after any
+// exit systemd didn't ask for, and StartLimitIntervalSec=0 keeps a crash
+// loop (a port still held) from leaving it dead for good; RestartSec
+// bounds the churn. A stop through systemctl stays stopped.
 func renderUnit(sp Spec) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n", Marker)
@@ -115,9 +115,12 @@ func renderUnit(sp Spec) string {
 	b.WriteString("Type=exec\n")
 	fmt.Fprintf(&b, "ExecStart=%s\n", execLine(sp.Binary, "serve", "--config", sp.Config))
 	fmt.Fprintf(&b, "WorkingDirectory=%s\n", unitQuote(sp.WorkDir, false))
-	// The supervisor's PATH is minimal; the installer's PATH is what the
-	// start commands (npm, python3, …) were found on.
+	// The supervisor's PATH is minimal; service.path is where the start
+	// commands (npm, python3, …) are found.
 	fmt.Fprintf(&b, "Environment=%s\n", unitQuote("PATH="+sp.PATH, false))
+	for _, kv := range sp.envPairs() {
+		fmt.Fprintf(&b, "Environment=%s\n", unitQuote(kv, false))
+	}
 	if sp.System {
 		if sp.RunAs != "" {
 			fmt.Fprintf(&b, "User=%s\n", sp.RunAs)
@@ -126,7 +129,7 @@ func renderUnit(sp Spec) string {
 		b.WriteString("RuntimeDirectory=waker\nRuntimeDirectoryMode=0750\n")
 		fmt.Fprintf(&b, "Environment=%s\n", unitQuote(config.EnvControlSocket+"="+config.SystemControlSocket, false))
 	}
-	b.WriteString("Restart=always\nRestartSec=2\n")
+	fmt.Fprintf(&b, "Restart=%s\nRestartSec=2\n", systemdRestart(sp.Restart))
 	b.WriteString("# SIGTERM lets waker drain connections and stop the apps it started.\n")
 	b.WriteString("TimeoutStopSec=60\nNoNewPrivileges=true\n\n[Install]\n")
 	if sp.System {
@@ -135,6 +138,18 @@ func renderUnit(sp Spec) string {
 		b.WriteString("WantedBy=default.target\n")
 	}
 	return b.String()
+}
+
+// systemdRestart maps service.restart to systemd's Restart=; empty (a Spec
+// built without a config) is the default.
+func systemdRestart(r config.Restart) string {
+	switch r {
+	case config.RestartOnFailure:
+		return "on-failure"
+	case config.RestartNever:
+		return "no"
+	}
+	return "always"
 }
 
 func execLine(argv ...string) string {

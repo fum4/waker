@@ -136,6 +136,7 @@ func writeConfig(f *initFlags, p *prompt.Prompter, stdout, stderr io.Writer) (st
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
+	a.ServicePath = config.DefaultServicePath(false)
 	if err := os.WriteFile(path, a.Render(), 0o644); err != nil {
 		return "", err
 	}

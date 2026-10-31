@@ -124,6 +124,15 @@ resources:
     policy: lower-priority          # default lower-priority · lower-or-equal | never
     order: priority-then-idle       # default priority-then-idle · idle-then-priority
     protect: [api]                  # default [] · never evicted
+
+# ── service (all optional): how `waker service install` runs waker ────────
+service:
+  restart: always                   # default always · on-failure | never (your own supervisor)
+  path: ~/.local/bin:/usr/bin:/bin  # default ~/.local/bin + the system PATH (system: true: the system PATH alone)
+  system: false                     # default false · true: a system service (root)
+  start: true                       # default true · false: install and enable without (re)starting
+  env: {NODE_ENV: production}       # default {} · extra environment for waker and its apps
+  # user: www                       # default: the installing user · system: true only
 ```
 
 Sizes take a unit (`512MiB`, `2GiB`, `768M`; `0` needs none). Durations are Go durations (`10s`, `5m`, `1h30m`). Relative paths resolve against the config file's directory.
@@ -137,6 +146,7 @@ Sizes take a unit (`512MiB`, `2GiB`, `768M`; `0` needs none). Durations are Go d
 | `state_dir` | `$XDG_STATE_HOME/waker`, else `~/.local/state/waker` | Runtime mode overrides and learned memory peaks. |
 | `control_socket` | `$WAKER_CONTROL_SOCKET`, else `$XDG_RUNTIME_DIR/waker/control.sock`, else `<state_dir>/control.sock` | The CLI's unix socket ([`--system`](#as-a-service): `/run/waker/control.sock`). |
 | `resources` | see below | Memory policy. |
+| `service` | see above | How [`waker service install`](#as-a-service) runs waker: `restart`, `path`, `system`, `start`, `env`, `user`. Applied by the next `waker service install`. |
 | `defaults` | – | App keys every app inherits. |
 | `apps` | required | One entry per app. |
 
@@ -252,39 +262,39 @@ It never overwrites an existing config without `--force`. `--start` is split lik
 
 ### As a service
 
-`waker service install` is non-interactive, so an agent or a script can run it. It writes one unit and starts it:
+`waker service install` is non-interactive, so an agent or a script can run it. It writes one unit from the config's [`service:` block](#every-key-with-its-default) and starts it. Flags (`--restart`, `--path`, `--system`, `--no-start`, `--run-as`) override the file for that one run.
 
 | | Linux (systemd) | macOS (launchd) |
 |---|---|---|
 | default | user unit, `~/.config/systemd/user/waker.service` | LaunchAgent, `~/Library/LaunchAgents/io.nomadware.waker.plist` |
-| `--system` | `/etc/systemd/system/waker.service`, `User=` you | LaunchDaemon, `/Library/LaunchDaemons/…`, `UserName` you |
+| `system: true` | `/etc/systemd/system/waker.service`, `User=` you | LaunchDaemon, `/Library/LaunchDaemons/…`, `UserName` you |
 | logs | `journalctl --user -u waker.service -f` | `~/Library/Logs/waker/waker.log` |
 
-- **PATH.** A supervisor's PATH is minimal: `npm` or `python3` from your shell wouldn't be found at the first wake. The unit captures the PATH you install from (`--path` overrides it). `waker check` warns about any `start` or `stop` command missing from the installed service's PATH.
+- **PATH.** The service runs with `service.path`: `~/.local/bin` plus the system PATH (macOS: plus `/opt/homebrew/bin`), never the PATH of the shell you install from, so the unit is the same whoever installs it. `npm` from nvm or `python3` from pyenv isn't on it: `waker check` and install warn about any `start` or `stop` command missing from it, and you add the directory to `service.path`.
 - **Working directory.** It's the config file's directory, so `start: [./bin/api]` works as it does from there.
-- **Restarts.** waker fronts every app, so it comes back whenever it exits, 2 s later, with no start limit (`Restart=always`, `StartLimitIntervalSec=0`; launchd `KeepAlive`). `systemctl stop` / `launchctl bootout` leave it stopped.
-- **Starting.** install (re)starts the service so the new unit takes effect. `--no-start` only writes and enables it: it starts at the next boot (launchd: login), and a running waker keeps the old unit until you restart it. Use it from provisioning scripts that decide themselves when to restart, e.g. `systemctl --user try-restart waker` so a waker you stopped on purpose stays stopped.
+- **Restarts.** waker fronts every app, so by default (`restart: always`) it comes back whenever it exits, 2 s later, with no start limit (`Restart=always`, `StartLimitIntervalSec=0`; launchd `KeepAlive`). `on-failure` restarts only after a crash; `never` leaves it to your own supervisor. `systemctl stop` / `launchctl bootout` leave it stopped.
+- **Starting.** install (re)starts the service so the new unit takes effect. With `start: false` (`--no-start`) it only writes and enables it: it starts at the next boot (launchd: login), and a running waker keeps the old unit until you restart it. Use it from provisioning scripts that decide themselves when to restart, e.g. `systemctl --user try-restart waker` so a waker you stopped on purpose stays stopped.
+- **Changing it.** The supervisor reads the unit, not `waker.yaml`, so an edited `service:` block applies on the next `waker service install`. Until then, `waker check`, `waker status` and waker's startup log say the installed unit differs and print the command. A waker upgrade that writes units differently shows the same way.
 - **Linger (Linux).** A user unit stops when your last session ends unless linger is on. install and status print the exact `sudo loginctl enable-linger <you>` line; waker never runs sudo itself.
-- **Root.** `--system` needs root. Without it, install prints the `sudo …` line to run, with your PATH and user filled in.
+- **Root.** A system service needs root. Without it, install prints the `sudo …` line to run, with your user filled in.
 - **Control socket (`--system`, Linux).** A system service has no `XDG_RUNTIME_DIR` to share with your shell, so it listens on `/run/waker/control.sock` (`RuntimeDirectory=waker`). The CLI falls back to that socket when nothing listens on its default, and `waker status` ends with the socket it used.
 - **Ownership.** Every file carries a "Written by `waker service install`" marker. install never overwrites a unit you wrote yourself, and uninstall never removes one, without `--force`.
 - **Elsewhere** (no systemd, other OSes) install refuses and prints the command, PATH and restart policy to set up by hand.
 
 ### Provisioning (non-interactive)
 
-For a provisioning script (Ansible, cloud-init, a dotfiles hook) that already writes `waker.yaml`, these steps are safe to re-run:
+For a provisioning script (Ansible, cloud-init, a dotfiles hook) that already writes `waker.yaml`, these steps are safe to re-run. Settings belong in the file's `service:` block, not in flags; a script usually wants `start: false`, so that step 3 decides about restarting:
 
 ```sh
 # 1. Install a pinned release (signature and checksum verified; never prompts).
 curl -fsSL https://releases.nomadware.io/waker/install.sh | sh -s -- --version vX.Y.Z --no-setup
-# 2. Write and enable the unit. It refuses an invalid config (`waker check` names the field)
-#    and doesn't start or restart anything.
-waker service install --config /abs/path/waker.yaml --path "$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" --no-start
+# 2. Write and enable the unit from waker.yaml's service: block. It refuses an invalid config
+#    (`waker check` names the field).
+waker service install --config /abs/path/waker.yaml
 # 3. Apply the new binary, unit and config to a running waker; a waker you stopped stays stopped.
 systemctl --user try-restart waker    # or `start`, to bring it up now
 ```
 
-- **`--path`** pins a clean PATH holding your `start` / `stop` commands. Without it the unit gets the script's PATH, which may hold directories that don't outlive the run.
 - **Linger.** A user unit runs at boot only with linger on: run `sudo loginctl enable-linger <user>` once, as part of provisioning.
 - **Replacing a hand-written unit.** install refuses a `waker.service` it didn't write. Run step 2 once with `--force`, then never again: from then on the refusal protects against clobbering.
 - **Upgrades.** Bump the version in step 1 and re-run all three steps. The upgrade restarts waker, and that restart stops the apps it started; the next request starts them again.

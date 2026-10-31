@@ -51,7 +51,9 @@ type Config struct {
 	// ControlSocket is the unix socket the CLI talks to.
 	ControlSocket string    `yaml:"control_socket"`
 	Resources     Resources `yaml:"resources"`
-	Apps          []App     `yaml:"apps"`
+	// Service is how `waker service install` runs waker.
+	Service Service `yaml:"service"`
+	Apps    []App   `yaml:"apps"`
 
 	// inherited is what each app took from the defaults block, so
 	// validation names the key the owner actually wrote.

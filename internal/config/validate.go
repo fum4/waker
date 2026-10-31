@@ -71,6 +71,7 @@ func (c *Config) Validate() error {
 	}
 	c.validateDependsOn(names, add)
 	c.Resources.validate(names, add)
+	c.Service.validate(add)
 	return errors.Join(errs...)
 }
 

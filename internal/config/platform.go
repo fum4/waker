@@ -21,16 +21,24 @@ type Platform struct {
 	OS               string
 	AvailableSources []string
 	MemorySources    []MemorySource
+	// ServicePATH is service.path's default: the system's binary
+	// directories, never the installing shell's PATH (which would make the
+	// unit depend on who ran install, from where).
+	ServicePATH []string
 }
 
+// sysPATH is the standard system PATH (systemd's own default).
+var sysPATH = []string{"/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"}
+
 // PlatformFor returns goos's platform. macOS has no /proc and no systemd,
-// so it reads vm_stat and learns no peaks; every other OS is treated as
-// Linux.
+// so it reads vm_stat and learns no peaks, and Homebrew's bin joins the
+// PATH; every other OS is treated as Linux.
 func PlatformFor(goos string) Platform {
 	if goos == "darwin" {
-		return Platform{OS: goos, AvailableSources: []string{AvailableVMStat}, MemorySources: []MemorySource{MemoryNone}}
+		return Platform{OS: goos, AvailableSources: []string{AvailableVMStat}, MemorySources: []MemorySource{MemoryNone},
+			ServicePATH: append([]string{"/opt/homebrew/bin"}, sysPATH...)}
 	}
-	return Platform{OS: goos, AvailableSources: []string{AvailableMeminfo}, MemorySources: allMemorySources}
+	return Platform{OS: goos, AvailableSources: []string{AvailableMeminfo}, MemorySources: allMemorySources, ServicePATH: sysPATH}
 }
 
 // allMemorySources is every memory_source value waker knows, on any OS.

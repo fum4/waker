@@ -22,7 +22,8 @@ func runServe(args []string, _, stderr io.Writer) error {
 	if fs.NArg() > 0 {
 		return fmt.Errorf("%w: unexpected argument %q", errUsage, fs.Arg(0))
 	}
-	cfg, err := config.Load(config.ResolvePath(*cfgFlag))
+	cfgPath := config.ResolvePath(*cfgFlag)
+	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		return err
 	}
@@ -32,6 +33,9 @@ func runServe(args []string, _, stderr io.Writer) error {
 	}
 	log := slog.New(h)
 	log.Info("waker starting", "version", version.String(), "apps", len(cfg.Apps))
+	if msg := driftMessage(cfg, cfgPath); msg != "" {
+		log.Warn("service out of date", "detail", msg)
+	}
 	d, err := daemon.New(cfg, log)
 	if err != nil {
 		return err

@@ -266,27 +266,6 @@ func TestSystemdStatus(t *testing.T) {
 	}
 }
 
-func TestServicePATHRoundTrips(t *testing.T) {
-	const tricky = `/opt/a b/bin:/x%y/bin:/q"z/bin:/usr/bin`
-	for _, os := range []string{"linux", "darwin"} {
-		h := linuxHost(t)
-		h.OS = os
-		if _, _, ok := ServicePATH(h); ok {
-			t.Fatalf("%s: a PATH with nothing installed", os)
-		}
-		sp := spec()
-		sp.PATH = tricky
-		p, _ := PlanInstall(h, sp)
-		if err := p.Apply(&fakeRunner{}, &bytes.Buffer{}, false); err != nil {
-			t.Fatal(err)
-		}
-		got, unit, ok := ServicePATH(h)
-		if !ok || got != tricky || unit != p.Unit {
-			t.Errorf("%s: ServicePATH = %q, %s, %v; want %q", os, got, unit, ok, tricky)
-		}
-	}
-}
-
 func TestLookPath(t *testing.T) {
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "bin")

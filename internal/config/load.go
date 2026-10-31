@@ -114,6 +114,7 @@ func Parse(data []byte) (*Config, error) {
 
 func (c *Config) applyDefaults() {
 	c.Resources.applyDefaults()
+	c.Service.applyDefaults()
 	if c.StateDir == "" {
 		c.StateDir = defaultStateDir()
 	}
