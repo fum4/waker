@@ -148,6 +148,7 @@ type manager interface {
 	unitPath(system bool) string
 	install(Spec) (Plan, error)
 	uninstall(system bool) Plan
+	restart(system bool) Plan
 	status(system bool, r Runner) Status
 }
 

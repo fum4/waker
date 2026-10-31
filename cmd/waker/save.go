@@ -85,7 +85,7 @@ func (s *pendingSave) write(stdout io.Writer) error {
 		err = config.WriteFile(s.path, s.data)
 	}
 	if err != nil {
-		return fmt.Errorf("installed, but %s isn't saved to %s (%v); the file and the unit differ until you add it or install again", s.describe(), s.path, err)
+		return fmt.Errorf("the service is updated, but %s isn't saved to %s (%v); the file and the unit differ until you add it there", s.describe(), s.path, err)
 	}
 	fmt.Fprintf(stdout, "saved %s to %s (--no-save: this run only)\n", s.describe(), s.path)
 	return nil

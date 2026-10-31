@@ -28,7 +28,7 @@ waker reads the file once, at start. There is no file watch and no SIGHUP.
 | What you change | Applies |
 |---|---|
 | any app key, `defaults`, `resources`, `state_dir`, `control_socket` | at waker's next start: `systemctl --user restart waker`, a crash restart, a reboot |
-| `service:` | at the next `waker service install`, which rewrites the unit (and restarts waker, unless `start: false`). The supervisor reads the unit, not this file. Until then, `waker check`, `waker status` and waker's startup log warn that the installed unit differs, with the command to run. |
+| `service:` | at the next `waker restart`, which rewrites the unit and restarts waker (or `waker service install`, which restarts unless `start: false`). The supervisor reads the unit, not this file. Until then, `waker check`, `waker status` and waker's startup log warn that the installed unit differs, with the command to run. |
 | an app's mode or idle, at runtime | at once: `waker mode` / `waker reset` talk to the running daemon, and the override outlives restarts until reset |
 
 ## `service`

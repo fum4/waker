@@ -36,6 +36,7 @@ func commands() []command {
 		{"init", "write a waker.yaml for one app (prompts on a terminal; --yes takes flags)", func(a []string, o, e io.Writer) error { return aborted(runInit(a, o, e)) }},
 		{"setup", "init (if there is no config yet), then install the service", func(a []string, o, e io.Writer) error { return aborted(runSetup(a, o, e)) }},
 		{"service", "install|uninstall|status: run waker as a systemd or launchd service", runService},
+		{"restart", "restart the service so it runs what waker.yaml says now (rewrites a stale unit first)", runRestart},
 		{"version", "print the waker version", runVersion},
 	}
 }
