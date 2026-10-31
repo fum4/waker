@@ -20,6 +20,7 @@ type serviceFlags struct {
 	path    *string
 	runAs   *string
 	restart *string
+	noSave  *bool
 }
 
 func addServiceFlags(fs *flag.FlagSet) *serviceFlags {
@@ -30,27 +31,62 @@ func addServiceFlags(fs *flag.FlagSet) *serviceFlags {
 		path:    fs.String("path", "", "the service's PATH (service.path)"),
 		runAs:   fs.String("run-as", "", "--system: the account waker runs as (service.user; default $SUDO_USER, else you)"),
 		restart: fs.String("restart", "", "always, on-failure or never (service.restart)"),
+		noSave:  fs.Bool("no-save", false, "use these flags for this run only; don't save them to waker.yaml"),
 	}
+}
+
+// serviceKeyFlag is one service flag: the service: key it sets, how, the
+// value it saves, and the key's value in a resolved block (to tell a flag
+// that changes nothing).
+type serviceKeyFlag struct {
+	flag, key string
+	set       func(s *config.Service, f *serviceFlags)
+	saved     func(f *serviceFlags) any
+	resolved  func(s config.Service) any
+}
+
+// serviceKeyFlags is the one table of service flags: apply, the saved
+// keys and setup's forwarding all read it.
+var serviceKeyFlags = []serviceKeyFlag{
+	{"system", "system",
+		func(s *config.Service, f *serviceFlags) { s.System = *f.system },
+		func(f *serviceFlags) any { return *f.system },
+		func(s config.Service) any { return s.System }},
+	{"no-start", "start",
+		func(s *config.Service, f *serviceFlags) { start := !*f.noStart; s.Start = &start },
+		func(f *serviceFlags) any { return !*f.noStart },
+		func(s config.Service) any { return s.Starts() }},
+	{"path", "path", // saved as typed (~ unexpanded), compared resolved
+		func(s *config.Service, f *serviceFlags) { s.SetPath(*f.path) },
+		func(f *serviceFlags) any { return *f.path },
+		func(s config.Service) any { return s.Path }},
+	{"run-as", "user",
+		func(s *config.Service, f *serviceFlags) { s.User = *f.runAs },
+		func(f *serviceFlags) any { return *f.runAs },
+		func(s config.Service) any { return s.User }},
+	{"restart", "restart",
+		func(s *config.Service, f *serviceFlags) { s.Restart = config.Restart(*f.restart) },
+		func(f *serviceFlags) any { return *f.restart },
+		func(s config.Service) any { return string(s.Restart) }},
+}
+
+// given is the table rows whose flag is on the command line.
+func (f *serviceFlags) given() []serviceKeyFlag {
+	var rows []serviceKeyFlag
+	for _, r := range serviceKeyFlags {
+		if flagGiven(f.fs, r.flag) {
+			rows = append(rows, r)
+		}
+	}
+	return rows
 }
 
 // apply returns s with every given flag laid over it, validated the way
 // the file is.
 func (f *serviceFlags) apply(s config.Service) (config.Service, error) {
-	f.fs.Visit(func(fl *flag.Flag) {
-		switch fl.Name {
-		case "system":
-			s.System = *f.system
-		case "no-start":
-			start := !*f.noStart
-			s.Start = &start
-		case "path":
-			s.SetPath(*f.path)
-		case "run-as":
-			s.User = *f.runAs
-		case "restart":
-			s.Restart = config.Restart(*f.restart)
-		}
-	})
+	for _, r := range f.given() {
+		r.set(&s, f)
+	}
 	return s.Normalize()
 }
 

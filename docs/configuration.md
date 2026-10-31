@@ -33,7 +33,7 @@ waker reads the file once, at start. There is no file watch and no SIGHUP.
 
 ## `service`
 
-How `waker service install` writes and runs the unit (systemd) or job (launchd). Every key is optional. A flag of the same meaning (`--restart`, `--path`, `--system`, `--no-start`, `--run-as`) overrides the file for one run.
+How `waker service install` writes and runs the unit (systemd) or job (launchd). Every key is optional. A flag of the same meaning (`--restart`, `--path`, `--system`, `--no-start`, `--run-as`) overrides the file and is saved into this block once the command succeeds, leaving the rest of the file as written; `--no-save` keeps it to one run, and a file with a `# managed: <tool>` header is never written ([README § Flags are saved](../README.md#flags-are-saved)).
 
 | Key | Default | Meaning |
 |---|---|---|

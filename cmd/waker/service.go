@@ -75,10 +75,22 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	for _, w := range pathWarnings(cfg, sp.PATH, sp.WorkDir) {
 		fmt.Fprintf(stderr, "warning: %s\n", w)
 	}
+	var save *pendingSave
+	if !*sf.noSave {
+		save, err = prepareSave(cfgPath, sf.changedKeys(cfg.Service, settings))
+	}
 	if *dryRun {
 		plan.Print(stdout)
 		printNotes(stdout, plan.Notes)
+		if err != nil {
+			fmt.Fprintf(stderr, "warning: the real run refuses: %v\n", err)
+		} else if save != nil {
+			fmt.Fprintf(stdout, "note: would save %s to %s\n", save.describe(), save.path)
+		}
 		return nil
+	}
+	if err != nil {
+		return err
 	}
 	if sp.System && h.EUID != 0 {
 		// The same flags (the file holds the rest); the last --config wins,
@@ -94,9 +106,10 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	if err := plan.Apply(serviceRunner, stdout, *force); err != nil {
 		return err
 	}
+	saveErr := save.write(stdout)
 	printNotes(stdout, plan.Notes)
 	fmt.Fprintln(stdout, "installed; check it with: waker service status")
-	return nil
+	return saveErr
 }
 
 func runServiceUninstall(args []string, stdout, stderr io.Writer) error {

@@ -41,6 +41,8 @@ waker service install               # a systemd user unit (Linux) or a LaunchAge
 
 It runs `waker serve --config <this file>`, restarts whenever it exits and starts at boot ([details](#as-a-service)). `waker setup` does steps 2 and 4 in one go.
 
+Flags you pass to the CLI are saved to waker.yaml: `waker service install --restart on-failure` writes `restart: on-failure` into its `service:` block, so the file always describes the service you have ([details](#flags-are-saved)).
+
 ## Configuration
 
 The [minimal config](#quickstart) above is a whole, valid file: an app needs `name`, `listen`, `upstream` and `start`, and everything else has a default.
@@ -258,11 +260,11 @@ waker init --yes --start 'npm run start' --name shop --listen 0.0.0.0:8080 --ups
 waker setup --yes --start 'npm run start'   # the same, then waker service install
 ```
 
-It never overwrites an existing config without `--force`. `--start` is split like a shell command line (quotes, backslashes), but nothing is expanded: it's an argv. With an existing config, `setup` checks it and goes straight to the install. Ctrl-D cancels (exit 130) and writes nothing.
+It never overwrites an existing config without `--force`. `--start` is split like a shell command line (quotes, backslashes), but nothing is expanded: it's an argv. With an existing config, `setup` checks it and goes straight to the install. Ctrl-D cancels (exit 130) and writes nothing. Both take the service flags (`--restart`, `--path`, `--system`, `--no-start`, `--run-as`) and write them into the new file's `service:` block.
 
 ### As a service
 
-`waker service install` is non-interactive, so an agent or a script can run it. It writes one unit from the config's [`service:` block](#every-key-with-its-default) and starts it. Flags (`--restart`, `--path`, `--system`, `--no-start`, `--run-as`) override the file for that one run.
+`waker service install` is non-interactive, so an agent or a script can run it. It writes one unit from the config's [`service:` block](#every-key-with-its-default) and starts it. Flags (`--restart`, `--path`, `--system`, `--no-start`, `--run-as`) override the file, and are [saved to it](#flags-are-saved).
 
 | | Linux (systemd) | macOS (launchd) |
 |---|---|---|
@@ -281,9 +283,18 @@ It never overwrites an existing config without `--force`. `--start` is split lik
 - **Ownership.** Every file carries a "Written by `waker service install`" marker. install never overwrites a unit you wrote yourself, and uninstall never removes one, without `--force`.
 - **Elsewhere** (no systemd, other OSes) install refuses and prints the command, PATH and restart policy to set up by hand.
 
+#### Flags are saved
+
+Flags you pass to the CLI are saved to waker.yaml. After `service install`, `init` or `setup` succeeds, each flag that changed the service is written into the `service:` block, and nothing else in the file changes: comments, key order and alignment stay as you wrote them. A flag that only repeats the file or a default isn't written. The file then matches the installed unit, so the next install, a reboot or another machine with the same file gets the same service.
+
+- `--no-save` uses the flags for this run only (the unit has them; the file doesn't, so `waker check` reports the drift).
+- `--dry-run` saves nothing and prints what it would save.
+- A file whose header has a `# managed: <tool>` line (a template from chezmoi, Ansible, …) is never written: install refuses a flag that would change it and tells you to change the template, or pass `--no-save`. Without flags it installs from the file as usual.
+- The sudo line for `--system` saves nothing; the root run it prints does.
+
 ### Provisioning (non-interactive)
 
-For a provisioning script (Ansible, cloud-init, a dotfiles hook) that already writes `waker.yaml`, these steps are safe to re-run. Settings belong in the file's `service:` block, not in flags; a script usually wants `start: false`, so that step 3 decides about restarting:
+For a provisioning script (Ansible, cloud-init, a dotfiles hook) that already writes `waker.yaml`, these steps are safe to re-run. Settings belong in the file's `service:` block, not in flags; put `# managed: <tool>` in the file's header so waker never writes to it. A script usually wants `start: false`, so that step 3 decides about restarting:
 
 ```sh
 # 1. Install a pinned release (signature and checksum verified; never prompts).
