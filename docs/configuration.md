@@ -53,7 +53,7 @@ Whether waker looks for newer releases. It never installs one by itself: `waker 
 
 | Key | Default | Meaning |
 |---|---|---|
-| `check` | `true` | At most once a day, one GET of `https://releases.nomadware.io/waker/latest` (no identifiers sent), recorded in `<state_dir>/update.json`. A newer release is logged by `waker serve`, printed by `waker status`, and shown as a dim stderr line after CLI commands run on a terminal. `false`: never. `WAKER_NO_UPDATE_CHECK=1` in the environment turns it off whatever the file says. |
+| `check` | `true` | Once a day, one GET of `https://releases.nomadware.io/waker/latest` (no identifiers sent), recorded in `<state_dir>/update.json`. A newer release is logged by `waker serve`, printed by `waker status` (from the last check), and shown as a dim stderr line after CLI commands succeed on a terminal (not as root). Only release builds check. `false`: never. `WAKER_NO_UPDATE_CHECK=1` in the environment turns it off whatever the file says. |
 
 `waker check --effective` prints the resolved block.
 

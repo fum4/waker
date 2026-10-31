@@ -111,6 +111,21 @@ func TestCheckRecordFromTheFutureIsDue(t *testing.T) {
 	}
 }
 
+// A check the caller gave up on hasn't happened: the next one asks again.
+func TestCheckCancelledRecordsNothing(t *testing.T) {
+	h, c, cnt, _ := newCheck(t)
+	h.Publish("v0.4.0", updatetest.Script("v0.4.0"))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, ok := c.Latest(ctx); ok {
+		t.Fatal("a cancelled check found a tag")
+	}
+	before := cnt.n.Load() // the cancelled attempt may or may not reach the transport
+	if tag, ok := c.Latest(context.Background()); !ok || tag.String() != "v0.4.0" || cnt.n.Load() != before+1 {
+		t.Errorf("= %v, %v after %d new requests; want v0.4.0 from a new one", tag, ok, cnt.n.Load()-before)
+	}
+}
+
 func TestAvailable(t *testing.T) {
 	v4, _ := update.ParseTag("v0.4.0")
 	for _, tc := range []struct{ cur, want string }{

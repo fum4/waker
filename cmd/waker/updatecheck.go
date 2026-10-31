@@ -14,6 +14,16 @@ import (
 	"github.com/fum4/waker/internal/version"
 )
 
+const (
+	// hintTimeout bounds the CLI's request: a command waits for it, at
+	// most once a day.
+	hintTimeout = 2 * time.Second
+	// serveRecheck is how often serve re-reads the shared record (asking
+	// the release home only once it is a day old), so a CLI refresh never
+	// delays serve's by a day.
+	serveRecheck = time.Hour
+)
+
 // stderrTerminal reports whether the hint may go to w (tests fake a TTY).
 var stderrTerminal = func(w io.Writer) bool {
 	f, ok := w.(*os.File)
@@ -21,63 +31,68 @@ var stderrTerminal = func(w io.Writer) bool {
 }
 
 // updateCheck is cfg's background release check; ok is false when the
-// config turns it off, WAKER_NO_UPDATE_CHECK is set or this is a dev
-// build (no release is newer or older than it).
+// config turns it off, WAKER_NO_UPDATE_CHECK is set or this isn't a clean
+// release build (a dev, pseudo-version or +dirty build has no release).
 func updateCheck(cfg *config.Config) (c update.Check, ok bool) {
-	if !cfg.Update.Checks() || !update.Unattended() || !update.ParseVersion(version.String()).Known {
+	s := version.String()
+	v := update.ParseVersion(s)
+	if !cfg.Update.Checks() || !update.Unattended() || !v.Known || v.Pre || strings.Contains(s, "+") {
 		return update.Check{}, false
 	}
 	return update.Check{Source: releaseSource(), StateDir: cfg.StateDir}, true
 }
 
-// availableLine is the "newer release" line for cfg, or "".
-func availableLine(ctx context.Context, cfg *config.Config) string {
-	c, ok := updateCheck(cfg)
-	if !ok {
-		return ""
-	}
-	tag, ok := c.Latest(ctx)
+// available is the "newer release" line for tag, or "".
+func available(tag update.Tag, ok bool) string {
 	if !ok {
 		return ""
 	}
 	return update.Available(update.ParseVersion(version.String()), tag)
 }
 
+// knownUpdate is the line for the last recorded check, without a request
+// (status: it must stay fast and offline).
+func knownUpdate(cfg *config.Config) string {
+	c, ok := updateCheck(cfg)
+	if !ok {
+		return ""
+	}
+	return available(c.Known())
+}
+
 // startHint looks for a newer release while a CLI command runs; the
 // returned func prints one dim line on stderr if there is one and the
-// command succeeded. Off the terminal it does nothing: scripts and pipes
-// never see it.
+// command succeeded. It does nothing off a terminal (scripts and pipes
+// never see it) or as root (sudo must not create or own the state dir).
 func startHint(args []string, stderr io.Writer) func(succeeded bool) {
-	if !stderrTerminal(stderr) {
+	if h, err := currentHost(); err != nil || h.EUID == 0 || !stderrTerminal(stderr) {
 		return func(bool) {}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	line := make(chan string, 1)
 	go func() {
 		cfg, err := config.Load(config.ResolvePath(configArg(args)))
-		if err != nil {
+		c, ok := update.Check{}, false
+		if err == nil {
+			c, ok = updateCheck(cfg)
+		}
+		if !ok {
 			line <- ""
 			return
 		}
-		line <- availableLine(ctx, cfg)
+		c.Timeout = hintTimeout
+		line <- available(c.Latest(ctx))
 	}()
 	return func(succeeded bool) {
-		defer cancel()
 		if !succeeded {
-			return
+			cancel() // a cancelled check records nothing
 		}
-		if l := <-line; l != "" {
-			io.WriteString(stderr, dim(l)+"\n")
+		l := <-line // never leave it running: it may still be writing update.json
+		cancel()
+		if succeeded && l != "" {
+			io.WriteString(stderr, prompt.Dim(l)+"\n")
 		}
 	}
-}
-
-// dim greys s out on a terminal, unless NO_COLOR is set.
-func dim(s string) string {
-	if os.Getenv("NO_COLOR") != "" {
-		return s
-	}
-	return "\x1b[2m" + s + "\x1b[0m"
 }
 
 // configArg finds --config's value in a command's raw arguments, before
@@ -101,20 +116,25 @@ func configArg(args []string) string {
 	return ""
 }
 
-// watchUpdates logs a newer release at serve's start, then once a day,
-// until ctx ends. It never installs anything.
+// watchUpdates logs a newer release at serve's start and whenever the
+// latest tag changes, until ctx ends. It never installs anything.
 func watchUpdates(ctx context.Context, cfg *config.Config, log *slog.Logger) {
-	if _, ok := updateCheck(cfg); !ok {
+	c, ok := updateCheck(cfg)
+	if !ok {
 		return
 	}
+	var logged update.Tag
 	for {
-		if l := availableLine(ctx, cfg); l != "" {
-			log.Info("update available", "detail", l)
+		if t, ok := c.Latest(ctx); ok && t != logged {
+			logged = t
+			if l := available(t, true); l != "" {
+				log.Info("update available", "detail", l)
+			}
 		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(update.CheckEvery):
+		case <-time.After(serveRecheck):
 		}
 	}
 }

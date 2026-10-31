@@ -57,6 +57,14 @@ func ColorWanted() bool {
 	return os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
 }
 
+// Dim greys s out when colour is wanted (a line printed outside a prompt).
+func Dim(s string) string {
+	if !ColorWanted() || s == "" {
+		return s
+	}
+	return dim + s + reset
+}
+
 func (p *Prompter) style(s string, codes ...string) string {
 	if !p.color || s == "" {
 		return s

@@ -1,13 +1,14 @@
 package main
 
 import (
-	"context"
 	"io"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fum4/waker/internal/config"
+	"github.com/fum4/waker/internal/state"
 	"github.com/fum4/waker/internal/update"
 	"github.com/fum4/waker/internal/update/updatetest"
 )
@@ -61,13 +62,17 @@ func TestNoHint(t *testing.T) {
 		{"update.check false", "update: {check: false}\n", "", true, []string{"check"}},
 		{"WAKER_NO_UPDATE_CHECK", "", "1", true, []string{"check"}},
 		{"a failed command", "", "", true, []string{"mode"}},
-		{"a command that shows it itself", "", "", true, []string{"update", "--check"}},
+		{"a command that shows it itself", "", "", true, []string{"status"}},
+		{"root", "", "", true, []string{"check"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, _ := fakeRelease(t, "0.3.0")
 			h.Publish("v0.4.0", updatetest.Script("v0.4.0"))
 			if tc.terminal {
 				onTerminal(t)
+			}
+			if tc.name == "root" {
+				fakeHost(t, 0)
 			}
 			t.Setenv(update.EnvNoCheck, tc.env)
 			args := append(tc.args, "--config", checkConfig(t, tc.extra))
@@ -78,15 +83,38 @@ func TestNoHint(t *testing.T) {
 	}
 }
 
-func TestAvailableLineSkipsDevBuilds(t *testing.T) {
-	h, _ := fakeRelease(t, "dev")
-	h.Publish("v0.4.0", updatetest.Script("v0.4.0"))
+// Only a clean release build checks: no release replaces the others.
+func TestUpdateCheckOnlyForReleaseBuilds(t *testing.T) {
 	cfg, err := config.Load(checkConfig(t, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if l := availableLine(context.Background(), cfg); l != "" {
-		t.Errorf("dev build: %q", l)
+	for v, want := range map[string]bool{
+		"0.3.0": true, "v0.3.0": true,
+		"dev": false, "v0.3.1-0.20261031120000-abcdef123456": false, "v0.3.0+dirty": false,
+	} {
+		fakeRelease(t, v)
+		if _, ok := updateCheck(cfg); ok != want {
+			t.Errorf("version %s: checks = %v, want %v", v, ok, want)
+		}
+	}
+}
+
+// status shows what the last check recorded, and never asks itself.
+func TestKnownUpdateIsOffline(t *testing.T) {
+	fakeRelease(t, "0.3.0") // nothing published: a request would find nothing
+	cfg, err := config.Load(checkConfig(t, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := knownUpdate(cfg); l != "" {
+		t.Errorf("no record: %q", l)
+	}
+	if err := state.SaveUpdate(cfg.StateDir, state.Update{CheckedAt: time.Now(), Latest: "v0.4.0"}); err != nil {
+		t.Fatal(err)
+	}
+	if l := knownUpdate(cfg); l != hintLine {
+		t.Errorf("= %q, want %q", l, hintLine)
 	}
 }
 

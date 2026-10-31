@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	// CheckEvery caps the background check: one request a day at most,
-	// shared by serve and every CLI command (state_dir/update.json).
+	// CheckEvery spaces the background checks: one request a day, shared
+	// by serve and every CLI command through state_dir/update.json.
 	CheckEvery = 24 * time.Hour
 	// CheckTimeout bounds the check's one request.
 	CheckTimeout = 5 * time.Second
@@ -30,37 +30,63 @@ func Unattended() bool {
 type Check struct {
 	Source   Source
 	StateDir string
+	// Timeout bounds the request; zero is CheckTimeout.
+	Timeout time.Duration
 	// Now is the clock; nil is time.Now.
 	Now func() time.Time
 }
 
-// Latest is the newest release tag waker knows of: the one recorded when
-// the last check is under CheckEvery old, else the answer of one GET of
-// <base>/latest bounded by CheckTimeout. The slot is recorded before the
-// request, so a failing network costs one try a day; when it can't be
-// recorded (a state dir this user can't write), Latest stays off the
-// network. It is silent: ok is false when no tag is known.
+// Latest is the newest release tag waker knows of. When the last check is
+// a day old (or there is none) it first asks <base>/latest, once. Any
+// answer, a failure or a timeout included, counts as the day's check, so
+// an offline box isn't slowed down by every command; a ctx the caller
+// cancels doesn't. If update.json can't be written (a state dir this user
+// can't write) nothing could cap the checks, so it makes none. It is
+// silent: ok is false when no tag is known.
 func (c Check) Latest(ctx context.Context) (tag Tag, ok bool) {
-	now := time.Now()
-	if c.Now != nil {
-		now = c.Now()
-	}
+	now := c.now()
 	rec, err := state.LoadUpdate(c.StateDir)
 	if err != nil {
 		rec = state.Update{} // unreadable or torn: start over
 	}
-	age := now.Sub(rec.CheckedAt)
-	if rec.CheckedAt.IsZero() || age < 0 || age >= CheckEvery {
-		rec.CheckedAt = now
-		if state.SaveUpdate(c.StateDir, rec) == nil {
-			ctx, cancel := context.WithTimeout(ctx, CheckTimeout)
-			defer cancel()
-			if t, err := c.Source.Latest(ctx); err == nil {
-				rec.Latest = t.String()
-				_ = state.SaveUpdate(c.StateDir, rec) // the next check is a day away either way
+	if age := now.Sub(rec.CheckedAt); rec.CheckedAt.IsZero() || age < 0 || age >= CheckEvery {
+		if state.SaveUpdate(c.StateDir, rec) == nil { // the record is writable
+			timeout := c.Timeout
+			if timeout == 0 {
+				timeout = CheckTimeout
+			}
+			rctx, cancel := context.WithTimeout(ctx, timeout)
+			t, err := c.Source.Latest(rctx)
+			cancel()
+			if ctx.Err() == nil {
+				rec.CheckedAt = now
+				if err == nil {
+					rec.Latest = t.String()
+				}
+				_ = state.SaveUpdate(c.StateDir, rec) // best effort: silent
 			}
 		}
 	}
+	return recorded(rec)
+}
+
+// Known is the tag the last check recorded, without asking anyone.
+func (c Check) Known() (Tag, bool) {
+	rec, err := state.LoadUpdate(c.StateDir)
+	if err != nil {
+		return Tag{}, false
+	}
+	return recorded(rec)
+}
+
+func (c Check) now() time.Time {
+	if c.Now != nil {
+		return c.Now()
+	}
+	return time.Now()
+}
+
+func recorded(rec state.Update) (Tag, bool) {
 	t, err := ParseTag(rec.Latest)
 	return t, err == nil
 }
