@@ -169,7 +169,7 @@ func TestCheckWarnsAboutAStaleService(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeFile(t, cfgPath, strings.Replace(string(b), "restart: always", "restart: never", 1))
-	want := "warning: " + p.Unit + " " + stale + " (its service: block, or this waker version); apply it with: waker service install --config " + cfgPath + "\n"
+	want := "warning: " + p.Unit + " " + stale + " (its service: block, or this waker version); apply it with: waker restart --config " + cfgPath + "\n"
 	if code, stdout, _ := runCLI("check", "--config", cfgPath); code != 0 || !strings.Contains(stdout, want) {
 		t.Fatalf("stale unit = %d, %q; want %q", code, stdout, want)
 	}

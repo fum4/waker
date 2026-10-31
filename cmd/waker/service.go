@@ -1,11 +1,9 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/fum4/waker/internal/config"
 	"github.com/fum4/waker/internal/service"
@@ -39,77 +37,25 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	dryRun := fs.Bool("dry-run", false, "print the unit and the commands; change nothing")
 	force := fs.Bool("force", false, "overwrite a unit that install didn't write")
 	sf := addServiceFlags(fs)
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() > 0 {
-		return fmt.Errorf("%w: unexpected argument %q", errUsage, fs.Arg(0))
-	}
-	cfgPath, err := filepath.Abs(config.ResolvePath(*cfgFlag))
+	r, err := newServiceRun([]string{"service", "install"}, fs, cfgFlag, sf, args)
 	if err != nil {
 		return err
 	}
-	cfg, err := config.Load(cfgPath)
+	r.pinRunAs = true
+	plan, err := service.PlanInstall(r.h, r.sp)
+	r.manualSteps(err, stderr)
 	if err != nil {
 		return err
 	}
-	settings, err := sf.apply(cfg.Service)
-	if err != nil {
-		return fmt.Errorf("%w: %v", errUsage, err)
-	}
-	h, err := currentHost()
-	if err != nil {
-		return err
-	}
-	sp, err := serviceSpec(settings, cfgPath, h)
-	if err != nil {
-		return err
-	}
-	plan, err := service.PlanInstall(h, sp)
-	if errors.Is(err, service.ErrUnsupported) {
-		fmt.Fprintln(stderr, service.ManualSteps(sp))
-	}
-	if err != nil {
-		return err
-	}
-	for _, w := range pathWarnings(cfg, sp.PATH, sp.WorkDir) {
-		fmt.Fprintf(stderr, "warning: %s\n", w)
-	}
-	var save *pendingSave
-	if !*sf.noSave {
-		save, err = prepareSave(cfgPath, sf.changedKeys(cfg.Service, settings))
-	}
+	r.warnPATH(stderr)
 	if *dryRun {
-		plan.Print(stdout)
-		printNotes(stdout, plan.Notes)
-		if err != nil {
-			fmt.Fprintf(stderr, "warning: the real run refuses: %v\n", err)
-		} else if save != nil {
-			fmt.Fprintf(stdout, "note: would save %s to %s\n", save.describe(), save.path)
-		}
+		r.printDryRun(plan, stdout, stderr)
 		return nil
 	}
-	if err != nil {
+	if err := r.ready(); err != nil {
 		return err
 	}
-	if sp.System && h.EUID != 0 {
-		// The same flags (the file holds the rest); the last --config wins,
-		// made absolute for root's working directory. --run-as pins you,
-		// whom sudo would otherwise hide.
-		argv := append([]string{"sudo", sp.Binary, "service", "install"}, args...)
-		argv = append(argv, "--run-as", sp.RunAs, "--config", cfgPath)
-		return fmt.Errorf("a system service needs root; run:\n  %s", service.ShellJoin(argv))
-	}
-	if !sp.System && h.EUID == 0 && h.OS == "linux" {
-		return fmt.Errorf("%w: you are root; a user service would run in root's session: use --system", errUsage)
-	}
-	if err := plan.Apply(serviceRunner, stdout, *force); err != nil {
-		return err
-	}
-	saveErr := save.write(stdout)
-	printNotes(stdout, plan.Notes)
-	fmt.Fprintln(stdout, "installed; check it with: waker service status")
-	return saveErr
+	return r.apply(plan, *force, "installed; check it with: waker service status", stdout)
 }
 
 func runServiceUninstall(args []string, stdout, stderr io.Writer) error {

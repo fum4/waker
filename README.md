@@ -41,7 +41,7 @@ waker service install               # a systemd user unit (Linux) or a LaunchAge
 
 It runs `waker serve --config <this file>`, restarts whenever it exits and starts at boot ([details](#as-a-service)). `waker setup` does steps 2 and 4 in one go.
 
-Flags you pass to the CLI are saved to waker.yaml: `waker service install --restart on-failure` writes `restart: on-failure` into its `service:` block, so the file always describes the service you have ([details](#flags-are-saved)).
+Edit waker.yaml, then `waker restart`: it applies. Flags you pass to the CLI are saved to waker.yaml: `waker service install --restart on-failure` writes `restart: on-failure` into its `service:` block, so the file always describes the service you have ([details](#flags-are-saved)).
 
 ## Configuration
 
@@ -148,7 +148,7 @@ Sizes take a unit (`512MiB`, `2GiB`, `768M`; `0` needs none). Durations are Go d
 | `state_dir` | `$XDG_STATE_HOME/waker`, else `~/.local/state/waker` | Runtime mode overrides and learned memory peaks. |
 | `control_socket` | `$WAKER_CONTROL_SOCKET`, else `$XDG_RUNTIME_DIR/waker/control.sock`, else `<state_dir>/control.sock` | The CLI's unix socket ([`--system`](#as-a-service): `/run/waker/control.sock`). |
 | `resources` | see below | Memory policy. |
-| `service` | see above | How [`waker service install`](#as-a-service) runs waker: `restart`, `path`, `system`, `start`, `env`, `user`. Applied by the next `waker service install`. |
+| `service` | see above | How [`waker service install`](#as-a-service) runs waker: `restart`, `path`, `system`, `start`, `env`, `user`. Applied by the next `waker restart` (or `waker service install`). |
 | `defaults` | – | App keys every app inherits. |
 | `apps` | required | One entry per app. |
 
@@ -244,6 +244,7 @@ waker mode blog off                  # take it offline (visitors get an "offline
 waker mode blog on-demand --idle 30s
 waker reset blog                     # back to the declared mode
 waker service install                # run as a service (--dry-run: print it; --system: system-wide)
+waker restart                        # apply waker.yaml now: rewrites a stale unit, then restarts
 waker service status                 # state, pid, where the logs are (exit 3 when not running)
 waker service uninstall              # remove everything install wrote
 waker version
@@ -276,7 +277,7 @@ It never overwrites an existing config without `--force`. `--start` is split lik
 - **Working directory.** It's the config file's directory, so `start: [./bin/api]` works as it does from there.
 - **Restarts.** waker fronts every app, so by default (`restart: always`) it comes back whenever it exits, 2 s later, with no start limit (`Restart=always`, `StartLimitIntervalSec=0`; launchd `KeepAlive`). `on-failure` restarts only after a crash; `never` leaves it to your own supervisor. `systemctl stop` / `launchctl bootout` leave it stopped.
 - **Starting.** install (re)starts the service so the new unit takes effect. With `start: false` (`--no-start`) it only writes and enables it: it starts at the next boot (launchd: login), and a running waker keeps the old unit until you restart it. Use it from provisioning scripts that decide themselves when to restart, e.g. `systemctl --user try-restart waker` so a waker you stopped on purpose stays stopped.
-- **Changing it.** The supervisor reads the unit, not `waker.yaml`, so an edited `service:` block applies on the next `waker service install`. Until then, `waker check`, `waker status` and waker's startup log say the installed unit differs and print the command. A waker upgrade that writes units differently shows the same way.
+- **Changing it.** Edit waker.yaml, then run `waker restart`: it applies. `waker restart` loads and validates the file first (a broken file never takes waker down), rewrites the unit if the `service:` block (or a new waker version) would write it differently, and restarts the service, starting it if it was stopped. It takes the same flags as install, and saves them. A unit you wrote yourself is restarted as it is. Until you restart, `waker check`, `waker status` and waker's startup log say the installed unit differs and print the command.
 - **Linger (Linux).** A user unit stops when your last session ends unless linger is on. install and status print the exact `sudo loginctl enable-linger <you>` line; waker never runs sudo itself.
 - **Root.** A system service needs root. Without it, install prints the `sudo …` line to run, with your user filled in.
 - **Control socket (`--system`, Linux).** A system service has no `XDG_RUNTIME_DIR` to share with your shell, so it listens on `/run/waker/control.sock` (`RuntimeDirectory=waker`). The CLI falls back to that socket when nothing listens on its default, and `waker status` ends with the socket it used.
@@ -285,7 +286,7 @@ It never overwrites an existing config without `--force`. `--start` is split lik
 
 #### Flags are saved
 
-Flags you pass to the CLI are saved to waker.yaml. After `service install`, `init` or `setup` succeeds, each flag that changed the service is written into the `service:` block, and nothing else in the file changes: comments, key order and alignment stay as you wrote them. A flag that only repeats the file or a default isn't written. The file then matches the installed unit, so the next install, a reboot or another machine with the same file gets the same service.
+Flags you pass to the CLI are saved to waker.yaml. After `service install`, `restart`, `init` or `setup` succeeds, each flag that changed the service is written into the `service:` block, and nothing else in the file changes: comments, key order and alignment stay as you wrote them. A flag that only repeats the file or a default isn't written. The file then matches the installed unit, so the next install, a reboot or another machine with the same file gets the same service.
 
 - `--no-save` uses the flags for this run only (the unit has them; the file doesn't, so `waker check` reports the drift).
 - `--dry-run` saves nothing and prints what it would save.

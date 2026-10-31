@@ -147,7 +147,7 @@ func driftMessage(cfg *config.Config, cfgPath string) string {
 	if err != nil || d != service.DriftStale {
 		return ""
 	}
-	argv := []string{"waker", "service", "install", "--config", sp.Config}
+	argv := []string{"waker", "restart", "--config", sp.Config}
 	if sp.System {
 		argv = append([]string{"sudo"}, argv...)
 	}
