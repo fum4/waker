@@ -59,7 +59,7 @@ func TestSystemdUserInstall(t *testing.T) {
 	for _, want := range []string{
 		"# " + Marker,
 		`ExecStart="/opt/waker/bin/waker" "serve" "--config" "/srv/my apps/waker.yaml"`,
-		`WorkingDirectory="/srv/my apps"`,
+		"WorkingDirectory=/srv/my apps\n",
 		`Environment="PATH=/home/ana/.local/bin:/usr/bin"`,
 		"[Unit]\nDescription=waker: scale-to-zero front for self-hosted apps\nAfter=network.target\nStartLimitIntervalSec=0\n",
 		"[Service]\nType=exec\n",

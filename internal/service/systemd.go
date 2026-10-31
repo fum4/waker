@@ -114,7 +114,9 @@ func renderUnit(sp Spec) string {
 	// exec, not simple: a binary that can't be executed fails the start.
 	b.WriteString("Type=exec\n")
 	fmt.Fprintf(&b, "ExecStart=%s\n", execLine(sp.Binary, "serve", "--config", sp.Config))
-	fmt.Fprintf(&b, "WorkingDirectory=%s\n", unitQuote(sp.WorkDir, false))
+	// WorkingDirectory takes a literal path: systemd does not unquote it (a quoted
+	// value is a "bad unit file setting"), so only escape % specifiers.
+	fmt.Fprintf(&b, "WorkingDirectory=%s\n", strings.ReplaceAll(sp.WorkDir, "%", "%%"))
 	// The supervisor's PATH is minimal; service.path is where the start
 	// commands (npm, python3, …) are found.
 	fmt.Fprintf(&b, "Environment=%s\n", unitQuote("PATH="+sp.PATH, false))
