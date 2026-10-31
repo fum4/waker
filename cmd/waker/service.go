@@ -75,10 +75,22 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	for _, w := range pathWarnings(cfg, sp.PATH, sp.WorkDir) {
 		fmt.Fprintf(stderr, "warning: %s\n", w)
 	}
+	var save *pendingSave
+	if !*sf.noSave {
+		save, err = prepareSave(cfgPath, sf.changedKeys(cfg.Service, cfgPath, h, sp))
+	}
 	if *dryRun {
 		plan.Print(stdout)
 		printNotes(stdout, plan.Notes)
+		if err != nil {
+			fmt.Fprintf(stderr, "warning: the real run refuses: %v\n", err)
+		} else if save != nil {
+			fmt.Fprintf(stdout, "note: would save %s to %s\n", save.describe(), save.path)
+		}
 		return nil
+	}
+	if err != nil {
+		return err
 	}
 	if sp.System && h.EUID != 0 {
 		// The same flags (the file holds the rest); the last --config wins,
@@ -92,6 +104,9 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("%w: you are root; a user service would run in root's session: use --system", errUsage)
 	}
 	if err := plan.Apply(serviceRunner, stdout, *force); err != nil {
+		return err
+	}
+	if err := save.write(stdout); err != nil {
 		return err
 	}
 	printNotes(stdout, plan.Notes)

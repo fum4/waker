@@ -26,10 +26,12 @@ type initFlags struct {
 	config, name, listen, start, health, idle string
 	upstreamPort                              int
 	yes, force                                bool
+	// service is the service: keys as flags, written into the new file.
+	service *serviceFlags
 }
 
 func addInitFlags(fs *flag.FlagSet) *initFlags {
-	f := &initFlags{}
+	f := &initFlags{service: addServiceFlags(fs)}
 	fs.StringVar(&f.config, "config", "", "file to write (default $WAKER_CONFIG, else ./waker.yaml)")
 	fs.StringVar(&f.name, "name", "", "app name (default: the config directory's name)")
 	fs.StringVar(&f.listen, "listen", scaffold.DefaultListen, "waker's host:port: 0.0.0.0 for other machines, 127.0.0.1 behind a proxy")
@@ -48,6 +50,9 @@ func runInit(args []string, stdout, stderr io.Writer) error {
 	if err := parseNoArgs(fs, args); err != nil {
 		return err
 	}
+	if *f.service.noSave {
+		return fmt.Errorf("%w: --no-save: init only writes the file, so its flags are what it saves", errUsage)
+	}
 	p, err := f.prompter(stdout)
 	if err != nil {
 		return err
@@ -60,7 +65,7 @@ func runInit(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stdout, "next: waker service install --config %s\n", path)
 		return nil
 	}
-	return offerInstall(p, path, stdout, stderr)
+	return offerInstall(p, path, nil, stdout, stderr)
 }
 
 func runSetup(args []string, stdout, stderr io.Writer) error {
@@ -84,10 +89,13 @@ func runSetup(args []string, stdout, stderr io.Writer) error {
 	} else if path, err = writeConfig(f, p, stdout, stderr); err != nil {
 		return err
 	}
+	// install gets the flags too: it saves them to an existing config
+	// (writeConfig already did to a new one) and honours --no-save.
+	install := f.service.args()
 	if p == nil {
-		return runServiceInstall([]string{"--config", path}, stdout, stderr)
+		return runServiceInstall(append([]string{"--config", path}, install...), stdout, stderr)
 	}
-	return offerInstall(p, path, stdout, stderr)
+	return offerInstall(p, path, install, stdout, stderr)
 }
 
 // prompter is nil with --yes; an error without --yes and no terminal,
@@ -137,7 +145,13 @@ func writeConfig(f *initFlags, p *prompt.Prompter, stdout, stderr io.Writer) (st
 		return "", err
 	}
 	a.ServicePath = config.DefaultServicePath(false)
-	if err := os.WriteFile(path, a.Render(), 0o644); err != nil {
+	data := a.Render()
+	if !*f.service.noSave {
+		if data, err = config.EditService(path, data, f.service.givenKeys()); err != nil {
+			return "", err
+		}
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return "", err
 	}
 	return path, report(p, "wrote", path, stdout, stderr)
@@ -169,7 +183,7 @@ func (f *initFlags) answers(path string) (scaffold.Answers, error) {
 	return a, nil
 }
 
-func offerInstall(p *prompt.Prompter, path string, stdout, stderr io.Writer) error {
+func offerInstall(p *prompt.Prompter, path string, install []string, stdout, stderr io.Writer) error {
 	fmt.Fprintln(stdout)
 	yes, err := p.Confirm("Install as a service now?", true)
 	if err != nil || !yes {
@@ -178,7 +192,7 @@ func offerInstall(p *prompt.Prompter, path string, stdout, stderr io.Writer) err
 		}
 		return err
 	}
-	return runServiceInstall([]string{"--config", path}, stdout, stderr)
+	return runServiceInstall(append([]string{"--config", path}, install...), stdout, stderr)
 }
 
 func parseNoArgs(fs *flag.FlagSet, args []string) error {

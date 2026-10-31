@@ -20,6 +20,7 @@ type serviceFlags struct {
 	path    *string
 	runAs   *string
 	restart *string
+	noSave  *bool
 }
 
 func addServiceFlags(fs *flag.FlagSet) *serviceFlags {
@@ -30,13 +31,22 @@ func addServiceFlags(fs *flag.FlagSet) *serviceFlags {
 		path:    fs.String("path", "", "the service's PATH (service.path)"),
 		runAs:   fs.String("run-as", "", "--system: the account waker runs as (service.user; default $SUDO_USER, else you)"),
 		restart: fs.String("restart", "", "always, on-failure or never (service.restart)"),
+		noSave:  fs.Bool("no-save", false, "use these flags for this run only; don't save them to waker.yaml"),
 	}
 }
 
 // apply returns s with every given flag laid over it, validated the way
 // the file is.
 func (f *serviceFlags) apply(s config.Service) (config.Service, error) {
+	return f.applyExcept(s, "")
+}
+
+// applyExcept is apply without the flag named skip.
+func (f *serviceFlags) applyExcept(s config.Service, skip string) (config.Service, error) {
 	f.fs.Visit(func(fl *flag.Flag) {
+		if fl.Name == skip {
+			return
+		}
 		switch fl.Name {
 		case "system":
 			s.System = *f.system
