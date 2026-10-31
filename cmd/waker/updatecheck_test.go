@@ -106,21 +106,23 @@ func TestUpdateCheckOnlyForReleaseBuilds(t *testing.T) {
 func TestRenderUpdate(t *testing.T) {
 	at := time.Date(2026, 10, 31, 12, 0, 0, 0, time.Local)
 	for _, tc := range []struct {
-		name string
-		r    control.Report
-		want []string
+		name    string
+		r       control.Report
+		want    []string
+		noCheck bool
 	}{
-		{"no record", control.Report{Version: "0.3.0"}, nil},
-		{"newer", control.Report{Version: "0.3.0", Update: &state.Update{Latest: "v0.4.0"}}, []string{hintLine}},
-		{"up to date", control.Report{Version: "0.4.0", Update: &state.Update{Latest: "v0.4.0"}}, nil},
+		{"no record", control.Report{Version: "0.3.0"}, nil, false},
+		{"newer", control.Report{Version: "0.3.0", Update: &state.Update{Latest: "v0.4.0"}}, []string{hintLine}, false},
+		{"newer, checks off", control.Report{Version: "0.3.0", Update: &state.Update{Latest: "v0.4.0"}}, nil, true},
+		{"up to date", control.Report{Version: "0.4.0", Update: &state.Update{Latest: "v0.4.0"}}, nil, false},
 		{"applied", control.Report{Version: "0.4.0", Update: &state.Update{
-			Last: &state.Attempt{At: at, From: "v0.3.0", To: "v0.4.0", Outcome: state.UpdateApplied}}}, nil},
+			Last: &state.Attempt{At: at, From: "v0.3.0", To: "v0.4.0", Outcome: state.UpdateApplied}}}, nil, false},
 		{"rolled back", control.Report{Version: "0.3.0", Update: &state.Update{
 			Last: &state.Attempt{At: at, From: "v0.3.0", To: "v0.4.0", Outcome: state.UpdateRolledBack, Detail: "v0.4.0 didn't reach serving"}}},
-			[]string{"last automatic update: v0.3.0 → v0.4.0 rolled-back, 2026-10-31 12:00 (v0.4.0 didn't reach serving)"}},
+			[]string{"last automatic update: v0.3.0 → v0.4.0 rolled-back, 2026-10-31 12:00 (v0.4.0 didn't reach serving)"}, false},
 	} {
 		var b strings.Builder
-		renderUpdate(&b, tc.r)
+		renderUpdate(&b, tc.r, !tc.noCheck)
 		got := strings.Fields(strings.TrimSpace(b.String()))
 		want := strings.Fields(strings.Join(tc.want, "\n"))
 		if strings.Join(got, " ") != strings.Join(want, " ") {

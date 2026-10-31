@@ -62,12 +62,14 @@ func available(tag update.Tag, ok bool) string {
 // renderUpdate prints the daemon's update record for status: a newer
 // release than the daemon runs, and how the last automatic update ended.
 // It reads the report, so it works across users and makes no request.
-func renderUpdate(w io.Writer, r control.Report) {
+// checks false (update.check off, or WAKER_NO_UPDATE_CHECK) hides the
+// newer-release line: the recorded tag may be stale.
+func renderUpdate(w io.Writer, r control.Report, checks bool) {
 	u := r.Update
 	if u == nil {
 		return
 	}
-	if t, err := update.ParseTag(u.Latest); err == nil {
+	if t, err := update.ParseTag(u.Latest); checks && err == nil {
 		if l := update.Available(update.ParseVersion(r.Version), t); l != "" {
 			fmt.Fprintf(w, "\n%s\n", l)
 		}
