@@ -48,5 +48,6 @@ func runServe(args []string, _, stderr io.Writer) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	go watchUpdates(ctx, cfg, log)
 	return d.Run(ctx)
 }

@@ -135,6 +135,10 @@ service:
   start: true                       # default true · false: install and enable without (re)starting
   env: {NODE_ENV: production}       # default {} · extra environment for waker and its apps
   # user: www                       # default: the installing user · system: true only
+
+# ── update (all optional): looking for new releases ──────────────────────
+update:
+  check: true                       # default true · one request a day for the latest tag; false: never
 ```
 
 Sizes take a unit (`512MiB`, `2GiB`, `768M`; `0` needs none). Durations are Go durations (`10s`, `5m`, `1h30m`). Relative paths resolve against the config file's directory.
@@ -145,10 +149,11 @@ Sizes take a unit (`512MiB`, `2GiB`, `768M`; `0` needs none). Durations are Go d
 
 | Key | Default | Meaning |
 |---|---|---|
-| `state_dir` | `$XDG_STATE_HOME/waker`, else `~/.local/state/waker` | Runtime mode overrides and learned memory peaks. |
+| `state_dir` | `$XDG_STATE_HOME/waker`, else `~/.local/state/waker` | Runtime mode overrides, learned memory peaks, the last release check. |
 | `control_socket` | `$WAKER_CONTROL_SOCKET`, else `$XDG_RUNTIME_DIR/waker/control.sock`, else `<state_dir>/control.sock` | The CLI's unix socket ([`--system`](#as-a-service): `/run/waker/control.sock`). |
 | `resources` | see below | Memory policy. |
 | `service` | see above | How [`waker service install`](#as-a-service) runs waker: `restart`, `path`, `system`, `start`, `env`, `user`. Applied at waker's next start, however it restarts ([Changing it](#as-a-service)). |
+| `update` | see above | `check`: look for a newer release once a day ([Updating](#updating)). |
 | `defaults` | – | App keys every app inherits. |
 | `apps` | required | One entry per app. |
 
@@ -254,6 +259,8 @@ waker version
 ### Updating
 
 `waker update` installs the latest release over the running binary the way install.sh does. It verifies the release's signature first, then checks that RELEASE says `waker <tag>` and that the binary matches its checksum. The new binary must also run and report that version. It then swaps the binary in atomically and keeps the old one as `waker.prev`. It prints old → new and a link to the changes, and never restarts anything: run `waker restart` to apply it. `--version vX.Y.Z` installs that release, older ones too; `--check` only says whether a newer one exists. Without `--version` it never goes back to an older release. It contacts `https://releases.nomadware.io/waker/` only (`NOMADWARE_RELEASES_BASE` overrides the host, as for install.sh). If it can't write the binary, it prints the `sudo` line.
+
+**The daily check.** With `update.check: true` (the default), waker looks for a newer release at most once a day, and never installs it. It sends one GET to `https://releases.nomadware.io/waker/latest` (5 s timeout) and nothing else: no identifiers, no version, no config. The answer and the time are kept in `<state_dir>/update.json`, which `waker serve` and the CLI share. When a newer release exists, `waker serve` logs it at start and daily, `waker status` prints it, and `check`, `mode`, `reset`, `restart`, `service` and `version` end with one dim line on stderr (on a terminal only, so scripts never see it): `waker v0.4.0 available (running v0.3.0): waker update`. A failed request is silent and still counts as the day's check. To turn it off, set `update.check: false`, or set `WAKER_NO_UPDATE_CHECK=1` in the environment: that stops every request waker makes without being asked, while an explicit `waker update` still works. Dev builds never check. Updating as you go is convenient for a single box; for a fleet, pin the version in your provisioning ([below](#provisioning-non-interactive)) and turn the check off.
 
 From source: `go install github.com/fum4/waker/cmd/waker@latest`.
 

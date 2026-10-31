@@ -42,6 +42,11 @@ func commands() []command {
 	}
 }
 
+// hinted are the commands that end with a "newer release" line on a
+// terminal: not serve (it logs it), status (it shows it), update (it is
+// the check), nor the first-run init and setup.
+var hinted = map[string]bool{"check": true, "mode": true, "reset": true, "restart": true, "service": true, "version": true}
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -58,7 +63,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if c.name != args[0] {
 			continue
 		}
+		hint := func(bool) {}
+		if hinted[c.name] {
+			hint = startHint(args[1:], stderr)
+		}
 		err := c.run(args[1:], stdout, stderr)
+		hint(err == nil)
 		var code exitCode
 		switch {
 		case errors.As(err, &code):

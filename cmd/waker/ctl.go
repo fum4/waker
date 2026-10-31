@@ -102,6 +102,9 @@ func runStatus(args []string, stdout, stderr io.Writer) error {
 	cfgPath := config.ResolvePath(*cfgFlag)
 	if cfg, err := config.Load(cfgPath); err == nil {
 		reportDrift(cfg, cfgPath, stdout)
+		if l := availableLine(context.Background(), cfg); l != "" {
+			fmt.Fprintf(stdout, "\n%s\n", l)
+		}
 	}
 	return nil
 }

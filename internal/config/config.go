@@ -53,7 +53,9 @@ type Config struct {
 	Resources     Resources `yaml:"resources"`
 	// Service is how `waker service install` runs waker.
 	Service Service `yaml:"service"`
-	Apps    []App   `yaml:"apps"`
+	// Update is how waker looks for (and installs) new releases.
+	Update Update `yaml:"update"`
+	Apps   []App  `yaml:"apps"`
 
 	// inherited is what each app took from the defaults block, so
 	// validation names the key the owner actually wrote.
