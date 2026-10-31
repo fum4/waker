@@ -9,8 +9,8 @@ import (
 // Drift is how the installed service compares with the one a Spec would
 // install. The supervisor runs the unit, not waker.yaml, so an edited
 // service block (or a waker upgrade that renders units differently) takes
-// effect only once `waker restart` (or `waker service install`) rewrites
-// the unit.
+// effect only once the unit is rewritten: by `waker serve` at start
+// (systemd; PlanHeal), `waker restart` or `waker service install`.
 type Drift int
 
 const (

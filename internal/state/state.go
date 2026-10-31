@@ -1,5 +1,6 @@
 // Package state persists what the waker learns at runtime: mode overrides
-// (modes.json) and learned memory peaks (peaks.json), both written
+// (modes.json), learned memory peaks (peaks.json) and serve's self-heal
+// loop guard (self-heal.json), all written
 // atomically (temp file, fsync, rename, fsync of the directory).
 package state
 
@@ -19,6 +20,8 @@ import (
 const (
 	ModesFile = "modes.json"
 	PeaksFile = "peaks.json"
+	// SelfHealFile is serve's loop guard: when it last rewrote its unit.
+	SelfHealFile = "self-heal.json"
 )
 
 // Override is a runtime mode set with `waker mode`, keyed by app name.
@@ -69,6 +72,23 @@ func LoadPeaks(dir string) (map[string]Peak, error) {
 // SavePeaks writes peaks.json atomically.
 func SavePeaks(dir string, m map[string]Peak) error {
 	return writeJSON(filepath.Join(dir, PeaksFile), m)
+}
+
+// selfHeal is self-heal.json: when serve last rewrote its own unit.
+type selfHeal struct {
+	At time.Time `json:"at"`
+}
+
+// LoadSelfHeal reads when serve last rewrote its unit; zero when never.
+func LoadSelfHeal(dir string) (time.Time, error) {
+	var s selfHeal
+	err := readJSON(filepath.Join(dir, SelfHealFile), &s)
+	return s.At, err
+}
+
+// SaveSelfHeal records that serve rewrote its unit at t.
+func SaveSelfHeal(dir string, t time.Time) error {
+	return writeJSON(filepath.Join(dir, SelfHealFile), selfHeal{At: t})
 }
 
 func readJSON(path string, v any) error {

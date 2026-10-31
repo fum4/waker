@@ -33,6 +33,10 @@ func runServe(args []string, _, stderr io.Writer) error {
 	}
 	log := slog.New(h)
 	log.Info("waker starting", "version", version.String(), "apps", len(cfg.Apps))
+	// Before binding: a re-exec leaves nothing half-started.
+	if selfHeal(cfg, cfgPath, log) {
+		return errReexec
+	}
 	if msg := driftMessage(cfg, cfgPath); msg != "" {
 		log.Warn("service out of date", "detail", msg)
 	}
