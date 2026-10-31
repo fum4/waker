@@ -4,6 +4,16 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+### Added
+- A `service:` block in waker.yaml (`restart`, `path`, `system`, `start`, `env`, `user`; all optional) that `waker service install` and `uninstall` read. Flags override it for one run; `--restart` is new. Validated with field paths (`service.restart: "sometimes" must be always, on-failure or never`) and shown by `waker check --effective`. `waker init` writes it commented out, with every default visible.
+- Drift warning: when the installed waker-written unit differs from the one waker.yaml describes (an edited `service:` block, or a waker upgrade that writes units differently), `waker check`, `waker status` and the startup log say so and print the `waker service install` line.
+- docs/configuration.md § When changes apply.
+
+### Changed
+- **Breaking:** the service's PATH defaults to `~/.local/bin` + the system PATH (macOS: plus `/opt/homebrew/bin`), no longer the installing shell's PATH. A start command found only via your shell's PATH (nvm, pyenv) needs its directory in `service.path`; `waker check` and install name it.
+- `service uninstall` takes `--config` and removes the scope that `service.system` names, unless `--system` says otherwise.
+- The `--system` sudo hint repeats your flags and adds `--run-as` and `--config`.
+
 ## [0.3.0] - 2026-10-31
 
 ### Added

@@ -10,3 +10,13 @@ apps:
     idle:     30m                    # stop after this long without a request
     health:
       path: /  # up = a GET below 400
+
+# How `waker service install` runs waker. Every key is optional; these are
+# the defaults. Uncomment to change one, then run `waker service install`.
+# service:
+#  restart: always  # always | on-failure | never (your own supervisor)
+#  path:    ~/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+#  system:  false   # true: a system service (root) instead of a user one
+#  start:   true    # false: install and enable without (re)starting
+#  env:     {}      # extra environment, e.g. {NODE_ENV: production}
+#  user:    ""      # system: true only; default: the installing user

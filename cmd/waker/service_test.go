@@ -1,12 +1,12 @@
 package main
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/fum4/waker/internal/config"
 	"github.com/fum4/waker/internal/service"
 )
 
@@ -33,6 +33,25 @@ func serviceConfig(t *testing.T, start string) string {
 	return path
 }
 
+// serviceConfigWith is serviceConfig plus top-level YAML (a service: block).
+func serviceConfigWith(t *testing.T, start, extra string) string {
+	t.Helper()
+	path := serviceConfig(t, start)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, path, string(b)+extra)
+	return path
+}
+
+// defaultUserPATH is a user service's default service.path with $HOME at
+// home: ~/.local/bin, then the platform's system PATH.
+func defaultUserPATH(home string) string {
+	sys := strings.TrimPrefix(config.DefaultServicePath(false), config.UserBinDir+":")
+	return filepath.Join(home, ".local", "bin") + ":" + sys
+}
+
 func TestServiceUsage(t *testing.T) {
 	for _, args := range [][]string{{"service"}, {"service", "frob"}} {
 		if code, _, stderr := runCLI(args...); code != 2 || !strings.Contains(stderr, "install") {
@@ -44,7 +63,9 @@ func TestServiceUsage(t *testing.T) {
 func TestServiceInstallDryRun(t *testing.T) {
 	h := fakeHost(t, 1000)
 	cfg := serviceConfig(t, "sh")
-	t.Setenv("PATH", "/usr/bin:/bin")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", "/usr/bin:/bin") // the shell's PATH is never the service's
 	code, stdout, stderr := runCLI("service", "install", "--dry-run", "--config", cfg)
 	if code != 0 {
 		t.Fatalf("dry-run = %d\n%s%s", code, stdout, stderr)
@@ -53,7 +74,8 @@ func TestServiceInstallDryRun(t *testing.T) {
 	for _, want := range []string{
 		"--- " + unit,
 		`"--config" "` + cfg + `"`,
-		`Environment="PATH=/usr/bin:/bin"`,
+		`Environment="PATH=` + defaultUserPATH(home) + `"`,
+		"Restart=always\n",
 		"$ systemctl --user enable waker.service",
 		"note: linger is off",
 		"sudo loginctl enable-linger ana",
@@ -88,13 +110,26 @@ func TestServiceInstallRefusesABadConfig(t *testing.T) {
 func TestServiceSystemNeedsRoot(t *testing.T) {
 	fakeHost(t, 1000)
 	cfg := serviceConfig(t, "sh")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("SUDO_USER", "")
+	// The sudo line repeats the given flags, pins the user sudo would hide
+	// and names the config by its absolute path.
 	code, _, stderr := runCLI("service", "install", "--system", "--config", cfg)
-	if code != 1 || !strings.Contains(stderr, "needs root; run:\n  sudo ") || !strings.Contains(stderr, "--system --config "+cfg+" --run-as ana --path ") {
-		t.Fatalf("= %d, %q", code, stderr)
+	if want := "needs root; run:\n  sudo " + exe + " service install --system --config " + cfg + " --run-as ana --config " + cfg + "\n"; code != 1 || !strings.HasSuffix(stderr, want) {
+		t.Fatalf("= %d, %q; want suffix %q", code, stderr, want)
 	}
 	if code, _, stderr := runCLI("service", "install", "--system", "--no-start", "--config", cfg); code != 1 || !strings.Contains(stderr, " --no-start") {
 		t.Fatalf("--no-start: the sudo line drops it: %d, %q", code, stderr)
+	}
+	// system: true in the file needs root too; the file carries it, so the
+	// line needs no --system.
+	sys := serviceConfigWith(t, "sh", "service: {system: true}\n")
+	code, _, stderr = runCLI("service", "install", "--config", sys)
+	if want := "sudo " + exe + " service install --config " + sys + " --run-as ana --config " + sys + "\n"; code != 1 || !strings.HasSuffix(stderr, want) {
+		t.Fatalf("file system: true = %d, %q; want suffix %q", code, stderr, want)
 	}
 	if code, _, stderr := runCLI("service", "uninstall", "--system"); code != 1 || !strings.Contains(stderr, "service uninstall --system") {
 		t.Fatalf("uninstall = %d, %q", code, stderr)
@@ -130,27 +165,24 @@ func TestServiceUnsupportedPrintsManualSteps(t *testing.T) {
 
 func TestCheckWarnsAboutTheServicePATH(t *testing.T) {
 	fakeHost(t, 1000)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 	cfg := serviceConfig(t, "definitely-not-a-command-xyz")
 	code, stdout, _ := runCLI("check", "--config", cfg)
-	if code != 0 || !strings.Contains(stdout, "warning: web.start") || !strings.Contains(stdout, "this shell's PATH (no service installed)") {
+	if code != 0 || !strings.Contains(stdout, `warning: web.start: "definitely-not-a-command-xyz" is not an executable on the service's PATH`) ||
+		!strings.Contains(stdout, "(checked against service.path "+defaultUserPATH(home)+")") {
 		t.Fatalf("= %d, %q", code, stdout)
 	}
+	// service.path is what counts, never this shell's PATH: sh is on the
+	// default service.path whatever the shell has...
+	t.Setenv("PATH", "/nonexistent")
 	if code, stdout, _ := runCLI("check", "--config", serviceConfig(t, "sh")); code != 0 || strings.Contains(stdout, "warning") {
-		t.Fatalf("sh on this shell's PATH = %d, %q", code, stdout)
+		t.Fatalf("sh on the default service.path = %d, %q", code, stdout)
 	}
-	// Once a service is installed, its unit's PATH is the one that counts:
-	// sh is on this shell's PATH but not on the unit's.
-	h, _ := currentHost()
-	p, err := service.PlanInstall(h, service.Spec{Binary: "/bin/waker", Config: cfg, WorkDir: filepath.Dir(cfg), PATH: "/nonexistent"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := p.Apply(nopRunner{}, io.Discard, false); err != nil {
-		t.Fatal(err)
-	}
-	code, stdout, _ = runCLI("check", "--config", serviceConfig(t, "sh"))
-	if code != 0 || !strings.Contains(stdout, `warning: web.start: "sh"`) || !strings.Contains(stdout, "the PATH in "+p.Unit) {
-		t.Fatalf("against the unit's PATH = %d, %q", code, stdout)
+	// ...and missing from a service.path without it.
+	code, stdout, _ = runCLI("check", "--config", serviceConfigWith(t, "sh", "service: {path: /nonexistent}\n"))
+	if code != 0 || !strings.Contains(stdout, `warning: web.start: "sh"`) || !strings.Contains(stdout, "(checked against service.path /nonexistent)") {
+		t.Fatalf("against service.path = %d, %q", code, stdout)
 	}
 }
 

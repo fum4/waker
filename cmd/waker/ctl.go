@@ -99,6 +99,10 @@ func runStatus(args []string, stdout, stderr io.Writer) error {
 		renderStatus(stdout, s, now)
 	}
 	fmt.Fprintf(stdout, "\nvia %s\n", socket)
+	cfgPath := config.ResolvePath(*cfgFlag)
+	if cfg, err := config.Load(cfgPath); err == nil {
+		reportDrift(cfg, cfgPath, stdout)
+	}
 	return nil
 }
 

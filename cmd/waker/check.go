@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"text/tabwriter"
 
@@ -49,16 +48,19 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	if err := tw.Flush(); err != nil {
 		return err
 	}
-	return checkServicePATH(cfg, path, stdout)
+	if err := checkServicePATH(cfg, path, stdout); err != nil {
+		return err
+	}
+	reportDrift(cfg, path, stdout)
+	return nil
 }
 
 // currentHost is the host check reads the installed service from; tests
 // swap in a fake one.
 var currentHost = service.CurrentHost
 
-// checkServicePATH warns about commands the service won't find: on the
-// installed service's PATH, else (none installed) on this shell's, which
-// is what `waker service install` would capture.
+// checkServicePATH warns about commands the service won't find on
+// service.path.
 func checkServicePATH(cfg *config.Config, cfgPath string, w io.Writer) error {
 	warnings, source, err := servicePATHWarnings(cfg, cfgPath)
 	for _, msg := range warnings {
@@ -70,20 +72,14 @@ func checkServicePATH(cfg *config.Config, cfgPath string, w io.Writer) error {
 	return err
 }
 
-// servicePATHWarnings returns pathWarnings against the PATH the service
-// has (or would capture), and which PATH that was.
+// servicePATHWarnings returns pathWarnings against service.path, and a
+// description of that PATH.
 func servicePATHWarnings(cfg *config.Config, cfgPath string) (warnings []string, source string, err error) {
 	abs, err := filepath.Abs(cfgPath)
 	if err != nil {
 		return nil, "", err
 	}
-	path, source := os.Getenv("PATH"), "this shell's PATH (no service installed)"
-	if h, err := currentHost(); err == nil {
-		if p, unit, ok := service.ServicePATH(h); ok {
-			path, source = p, "the PATH in "+unit
-		}
-	}
-	return pathWarnings(cfg, path, filepath.Dir(abs)), source, nil
+	return pathWarnings(cfg, cfg.Service.Path, filepath.Dir(abs)), "service.path " + cfg.Service.Path, nil
 }
 
 func runVersion(args []string, stdout, stderr io.Writer) error {

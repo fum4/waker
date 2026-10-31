@@ -6,7 +6,7 @@ waker reads one YAML file. It takes the first of these that is set:
 2. `$WAKER_CONFIG`;
 3. `./waker.yaml`.
 
-Unknown keys are errors, so typos fail loudly. `waker check` validates the file and reports every problem at once, each with its field path, e.g. `apps[1] (api).priority: 12 must be a number from 1 to 10`. A bad value inherited from `defaults` is reported once, at its real path (`defaults.idle: must be positive`). `waker check --effective` prints every app's resolved config, defaults applied. Relative paths (`state_dir`, `control_socket`, `branding.logo`, `pages.*`, `cwd`) resolve against the config file's directory, and `~/` is expanded.
+Unknown keys are errors, so typos fail loudly. `waker check` validates the file and reports every problem at once, each with its field path, e.g. `apps[1] (api).priority: 12 must be a number from 1 to 10`. A bad value inherited from `defaults` is reported once, at its real path (`defaults.idle: must be positive`). `waker check --effective` prints the resolved `service:` block and every app's resolved config, defaults applied. Relative paths (`state_dir`, `control_socket`, `branding.logo`, `pages.*`, `cwd`) resolve against the config file's directory, and `~/` is expanded.
 
 **Sizes** are written like `512MiB`, `2GiB` or `768M`. A unit is required, and the single-letter units are binary too (`1G` = `1GiB`). **Durations** are Go durations: `10s`, `5m`, `1h30m`.
 
@@ -17,8 +17,34 @@ Unknown keys are errors, so typos fail loudly. `waker check` validates the file 
 | `state_dir` | `$XDG_STATE_HOME/waker`, else `~/.local/state/waker` | Holds `modes.json` (runtime mode overrides) and `peaks.json` (learned memory peaks). Created 0700. |
 | `control_socket` | `$WAKER_CONTROL_SOCKET`, else `$XDG_RUNTIME_DIR/waker/control.sock`, else `<state_dir>/control.sock` | The CLI's unix socket. Its directory is 0700 and the socket 0600. A `--system` service listens on `/run/waker/control.sock` (its `RuntimeDirectory`, via `WAKER_CONTROL_SOCKET`); when the file leaves this key out and nothing listens on the default, the CLI falls back to that socket, and `waker status` ends with the one it used. |
 | `resources` | see below | Memory policy. |
+| `service` | see below | How `waker service install` runs waker. |
 | `defaults` | – | App keys every app inherits; see below. |
 | `apps` | required | One entry per app. |
+
+## When changes apply
+
+waker reads the file once, at start. There is no file watch and no SIGHUP.
+
+| What you change | Applies |
+|---|---|
+| any app key, `defaults`, `resources`, `state_dir`, `control_socket` | at waker's next start: `systemctl --user restart waker`, a crash restart, a reboot |
+| `service:` | at the next `waker service install`, which rewrites the unit (and restarts waker, unless `start: false`). The supervisor reads the unit, not this file. Until then, `waker check`, `waker status` and waker's startup log warn that the installed unit differs, with the command to run. |
+| an app's mode or idle, at runtime | at once: `waker mode` / `waker reset` talk to the running daemon, and the override outlives restarts until reset |
+
+## `service`
+
+How `waker service install` writes and runs the unit (systemd) or job (launchd). Every key is optional. A flag of the same meaning (`--restart`, `--path`, `--system`, `--no-start`, `--run-as`) overrides the file for one run.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `restart` | `always` | `always`: back after any exit the supervisor didn't ask for (systemd `Restart=always`; launchd `KeepAlive`). `on-failure`: only after a crash. `never`: your own supervisor restarts it. There is never a start limit. |
+| `path` | `~/.local/bin` + the system PATH; with `system: true`, the system PATH alone | The service's PATH, where `start` and `stop` commands are found. The system PATH is `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`, plus `/opt/homebrew/bin` first on macOS. It is never the installing shell's PATH, so the unit doesn't depend on who installed it from where. Entries must be absolute; `~/` is expanded for a user service, and a system service refuses `~`. |
+| `system` | `false` | `true`: a system service (root installs it; `/etc/systemd/system`, a LaunchDaemon) instead of a user one. |
+| `start` | `true` | `false`: install and enable without (re)starting; the caller restarts, e.g. `systemctl --user try-restart waker`. |
+| `env` | `{}` | Extra environment for waker and the apps it starts, e.g. `{NODE_ENV: production}`. `PATH` is refused: set `path`. |
+| `user` | the installing user (`$SUDO_USER` under sudo) | The account a system service runs as. Only with `system: true`. |
+
+`waker check --effective` prints the resolved block.
 
 ## `defaults`
 

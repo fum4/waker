@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/fum4/waker/internal/config"
 )
 
 // Label is the launchd job label install writes.
@@ -101,8 +103,10 @@ func (l launchd) status(system bool, r Runner) Status {
 	return st
 }
 
-// renderPlist writes the job. waker fronts every app, so KeepAlive=true
-// relaunches it after any exit; launchctl bootout leaves it stopped.
+// renderPlist writes the job. waker fronts every app, so by default
+// KeepAlive=true relaunches it after any exit (service.restart: on-failure
+// = only after an unsuccessful exit, never = no KeepAlive); launchctl
+// bootout leaves it stopped.
 func renderPlist(sp Spec, logFile string) string {
 	var b strings.Builder
 	b.WriteString(xml.Header)
@@ -117,12 +121,23 @@ func renderPlist(sp Spec, logFile string) string {
 	b.WriteString("  </array>\n")
 	key(&b, "WorkingDirectory", sp.WorkDir)
 	b.WriteString("  <key>EnvironmentVariables</key>\n  <dict>\n")
-	fmt.Fprintf(&b, "    <key>PATH</key>\n    <string>%s</string>\n  </dict>\n", esc(sp.PATH))
+	fmt.Fprintf(&b, "    <key>PATH</key>\n    <string>%s</string>\n", esc(sp.PATH))
+	for _, kv := range sp.envPairs() {
+		k, v, _ := strings.Cut(kv, "=")
+		fmt.Fprintf(&b, "    <key>%s</key>\n    <string>%s</string>\n", esc(k), esc(v))
+	}
+	b.WriteString("  </dict>\n")
 	if sp.System && sp.RunAs != "" {
 		key(&b, "UserName", sp.RunAs)
 	}
 	b.WriteString("  <key>RunAtLoad</key>\n  <true/>\n")
-	b.WriteString("  <key>KeepAlive</key>\n  <true/>\n")
+	switch sp.Restart {
+	case config.RestartOnFailure:
+		b.WriteString("  <key>KeepAlive</key>\n  <dict>\n    <key>SuccessfulExit</key>\n    <false/>\n  </dict>\n")
+	case config.RestartNever:
+	default:
+		b.WriteString("  <key>KeepAlive</key>\n  <true/>\n")
+	}
 	b.WriteString("  <key>ExitTimeOut</key>\n  <integer>60</integer>\n")
 	key(&b, "StandardOutPath", logFile)
 	key(&b, "StandardErrorPath", logFile)

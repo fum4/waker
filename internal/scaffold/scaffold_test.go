@@ -18,6 +18,7 @@ func sample() Answers {
 		Name: "blog", Listen: DefaultListen, UpstreamPort: 3000,
 		Start:      []string{"python3", "-m", "http.server", "3000", "--bind", "127.0.0.1"},
 		HealthPath: "/", Idle: "30m",
+		ServicePath: "~/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 	}
 }
 

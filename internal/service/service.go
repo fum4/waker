@@ -12,8 +12,11 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/fum4/waker/internal/config"
 )
 
 // Marker opens every file install writes; uninstall refuses to remove a
@@ -39,6 +42,21 @@ type Spec struct {
 	// NoStart installs and enables the service without starting or
 	// restarting it: the caller decides when the new unit takes over.
 	NoStart bool
+	// Restart is the supervisor's restart policy (config.Restart*).
+	Restart config.Restart
+	// Env is extra environment for the waker process.
+	Env map[string]string
+}
+
+// envPairs returns Env as sorted NAME=value pairs, so the rendered unit
+// (and the drift check comparing it) is stable.
+func (s Spec) envPairs() []string {
+	pairs := make([]string, 0, len(s.Env))
+	for k, v := range s.Env {
+		pairs = append(pairs, k+"="+v)
+	}
+	sort.Strings(pairs)
+	return pairs
 }
 
 // Host is what the planner knows about the machine: the real one in
@@ -137,9 +155,10 @@ type manager interface {
 func ManualSteps(s Spec) string {
 	return fmt.Sprintf(`Run waker under your init system or process supervisor:
   command:  %s
-  env:      PATH=%s
-  restart:  always, with no start limit
-  logs:     stderr`, ShellJoin([]string{s.Binary, "serve", "--config", s.Config}), s.PATH)
+  env:      %s
+  restart:  %s, with no start limit
+  logs:     stderr`, ShellJoin([]string{s.Binary, "serve", "--config", s.Config}),
+		strings.Join(append([]string{"PATH=" + s.PATH}, s.envPairs()...), " "), s.Restart)
 }
 
 func managerFor(h Host) (manager, error) {

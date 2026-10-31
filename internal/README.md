@@ -6,7 +6,7 @@ waker's packages. Dependencies point down this list. Nothing here is importable 
 |---|---|---|
 | `schedule` | Pure cron-window math: `Active`, `At` (current window's end, merged, or the next start), `Boundary`. Wraps robfig/cron. | – |
 | `config` | The YAML model: load, defaults, field-named validation, `Size`/`Duration` types. | schedule |
-| `service` | `waker service`: plans a systemd unit or launchd plist install/uninstall as files + commands (`Plan`, printed for `--dry-run`, else `Apply`), `Status`, `ServicePATH`, `LookPath` against a given PATH. A `Host` (fake in tests, with a `Root` prefix) and a `Runner` keep it off the real machine in tests. | – |
+| `service` | `waker service`: plans a systemd unit or launchd plist install/uninstall as files + commands (`Plan`, printed for `--dry-run`, else `Apply`), `Status`, `CheckDrift` (installed unit vs the one install would write), `LookPath` against a given PATH. A `Host` (fake in tests, with a `Root` prefix) and a `Runner` keep it off the real machine in tests. | – |
 | `prompt` | The terminal prompt `waker init` uses: `Ask` (label, dim default, inline validation, a ✔ redraw), `Confirm`, `IsTerminal`; ANSI off with `NO_COLOR`. Line-based, no dependency. | – |
 | `scaffold` | The starter config: `Answers`, their validators, `SplitArgs` (shell-like words → argv) and `Render` (the house-style YAML: header, fixed key order, aligned values and comments; golden-tested). | config |
 | `clock` | Real and fake clocks (the fake `Sleep` advances time, for tests). | – |
