@@ -13,6 +13,7 @@ import (
 	"github.com/fum4/waker/internal/app"
 	"github.com/fum4/waker/internal/config"
 	"github.com/fum4/waker/internal/control"
+	"github.com/fum4/waker/internal/update"
 )
 
 // systemSocket is where a system service listens; tests point it at a
@@ -100,12 +101,12 @@ func runStatus(args []string, stdout, stderr io.Writer) error {
 	}
 	fmt.Fprintf(stdout, "\nvia %s\n", socket)
 	cfgPath := config.ResolvePath(*cfgFlag)
+	checks := update.Unattended()
 	if cfg, err := config.Load(cfgPath); err == nil {
 		reportDrift(cfg, cfgPath, stdout)
-		if l := knownUpdate(cfg); l != "" {
-			fmt.Fprintf(stdout, "\n%s\n", l)
-		}
+		checks = checks && cfg.Update.Checks()
 	}
+	renderUpdate(stdout, report, checks)
 	return nil
 }
 

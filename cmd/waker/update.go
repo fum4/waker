@@ -72,14 +72,9 @@ func runUpdate(args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 
-	exe, err := executable()
+	dest, err := binaryPath()
 	if err != nil {
-		return fmt.Errorf("find the waker binary: %w", err)
-	}
-	// The real file: replacing a symlink would detach whatever manages it.
-	dest, err := filepath.EvalSymlinks(exe)
-	if err != nil {
-		return fmt.Errorf("find the waker binary: %w", err)
+		return err
 	}
 	rel, err := src.Fetch(ctx, tag, update.Asset())
 	if err != nil {
@@ -101,6 +96,19 @@ func runUpdate(args []string, stdout, stderr io.Writer) error {
 	fmt.Fprintf(stdout, "changes: %s\n", update.ChangelogURL(tag))
 	fmt.Fprintln(stdout, "restart to apply: waker restart")
 	return nil
+}
+
+// binaryPath is the file updates replace: the real one, since replacing a
+// symlink would detach whatever manages it.
+func binaryPath() (string, error) {
+	exe, err := executable()
+	if err == nil {
+		exe, err = filepath.EvalSymlinks(exe)
+	}
+	if err != nil {
+		return "", fmt.Errorf("find the waker binary: %w", err)
+	}
+	return exe, nil
 }
 
 // sudoUpdateLine installs the release just verified as root: pinned to its

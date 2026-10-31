@@ -59,9 +59,10 @@ func serviceBlock(path string) string {
 func updateBlock() string {
 	return commentedBlock("update", []string{
 		"Whether waker looks for a newer release (one request a day to",
-		"releases.nomadware.io; it never installs one by itself). The default:",
+		"releases.nomadware.io) and installs it. The defaults:",
 	}, []line{
 		{"check", "true", "false: never look (or set WAKER_NO_UPDATE_CHECK=1)"},
+		{"auto", "false", "true: serve installs it at start, rolls back if it fails"},
 	})
 }
 

@@ -12,11 +12,15 @@ import (
 	"github.com/fum4/waker/internal/config"
 	"github.com/fum4/waker/internal/control"
 	"github.com/fum4/waker/internal/state"
+	"github.com/fum4/waker/internal/version"
 )
 
 // Status implements control.Backend.
 func (d *Daemon) Status(ctx context.Context) control.Report {
-	r := control.Report{Policy: d.policy(), Apps: make([]app.Snapshot, 0, len(d.listening))}
+	r := control.Report{Version: version.String(), Policy: d.policy(), Apps: make([]app.Snapshot, 0, len(d.listening))}
+	if u, err := state.LoadUpdate(d.cfg.StateDir); err == nil {
+		r.Update = &u
+	}
 	for _, a := range d.listening {
 		r.Apps = append(r.Apps, d.withMemory(a, a.Snapshot(ctx)))
 	}

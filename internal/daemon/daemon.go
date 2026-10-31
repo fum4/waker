@@ -48,7 +48,14 @@ type Daemon struct {
 	peaks     map[string]state.Peak
 	listening []*app.App // apps whose listener bound, in config order
 	skipped   map[string]string
+
+	// ready runs once the listeners and the control socket are up.
+	ready func()
 }
+
+// OnReady sets f to run once Run is serving (the listeners and the
+// control socket are up); serve clears an update's marker there.
+func (d *Daemon) OnReady(f func()) { d.ready = f }
 
 // New builds the apps; it binds nothing yet.
 func New(cfg *config.Config, log *slog.Logger) (*Daemon, error) {
@@ -109,6 +116,9 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go func() { _ = ctlSrv.Serve(ctl) }()
 	servers = append(servers, ctlSrv)
 	d.log.Info("waker serving", "apps", len(d.listening), "control", d.cfg.ControlSocket)
+	if d.ready != nil {
+		d.ready()
+	}
 
 	for _, a := range d.listening {
 		if a.Mode() == config.ModeOn {
