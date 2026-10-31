@@ -4,6 +4,8 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-31
+
 ### Added
 - `waker service install --no-start`: write and enable the service without starting or restarting it, for provisioning scripts that decide when to restart. On macOS it writes the plist and prints the `launchctl bootstrap` line.
 
