@@ -119,8 +119,27 @@ func TestUpdateUnwritableBinaryPrintsSudo(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(filepath.Dir(dest), 0o755) })
 	code, _, stderr := runCLI("update")
-	if code != 1 || !strings.Contains(stderr, "sudo "+dest+" update") {
+	if code != 1 || !strings.Contains(stderr, "sudo "+dest+" update --version v0.4.0") {
 		t.Errorf("= %d %q", code, stderr)
+	}
+}
+
+// A pre-release or pseudo-version build (go install @master) is newer
+// than the release before its core: latest never takes it back.
+func TestUpdateNeverDowngradesAPseudoVersion(t *testing.T) {
+	h, dest := fakeRelease(t, "0.4.0")
+	version.Version = "v0.4.1-0.20261030120000-abcdef123456"
+	h.Publish("v0.4.0", updatetest.Script("v0.4.0"))
+	code, stdout, _ := runCLI("update")
+	if code != 0 || !strings.Contains(stdout, "is up to date (latest: v0.4.0)") {
+		t.Errorf("= %d %q", code, stdout)
+	}
+	if readString(t, dest) != string(updatetest.Script("v0.4.0")) {
+		t.Error("binary replaced")
+	}
+	h.Publish("v0.4.1", updatetest.Script("v0.4.1"))
+	if code, stdout, _ := runCLI("update"); code != 0 || !strings.Contains(stdout, "→ v0.4.1") {
+		t.Errorf("the release of its core: = %d %q", code, stdout)
 	}
 }
 

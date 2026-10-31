@@ -1,10 +1,10 @@
 package update
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,34 +19,47 @@ const PrevSuffix = ".prev"
 // dryRunTimeout bounds the new binary's `version` run.
 const dryRunTimeout = 10 * time.Second
 
-// ErrUnchanged is Install's answer when dest is already that build.
-var ErrUnchanged = errors.New("already this build")
+var (
+	// ErrUnchanged is Install's answer when dest is already that build.
+	ErrUnchanged = errors.New("already this build")
+	// ErrCantWrite wraps a failure to write beside dest or replace it:
+	// root (sudo) may fix it. A dry run that fails is never this.
+	ErrCantWrite = errors.New("can't write")
+	// ErrNotRecorded wraps a failure to record the installed tag after
+	// the binary was replaced: the update itself succeeded.
+	ErrNotRecorded = errors.New("installed, but the version record wasn't written")
+)
 
 // Install replaces dest with rel's binary the way install.sh does, and
 // more carefully: the new binary is written beside dest (dest.new), must
 // run and report rel's version, then the current dest is kept as
 // dest.prev and dest.new renamed over dest (atomic: a reader sees the old
 // or the new binary, never a torn one). It records the installed tag
-// where install.sh does, for its downgrade guard.
+// where install.sh does, for its downgrade guard, also when dest already
+// was that build.
 func Install(ctx context.Context, rel Release, dest string) error {
-	if sameBytes(dest, rel.Binary) {
+	if cur, err := os.ReadFile(dest); err == nil && bytes.Equal(cur, rel.Binary) {
+		_ = recordVersion(dest, rel.Tag) // repair a missing record; best effort
 		return ErrUnchanged
 	}
 	next := dest + ".new"
 	if err := writeFile(next, rel.Binary, 0o755); err != nil {
-		return err
+		return fmt.Errorf("%w %s: %w", ErrCantWrite, next, err)
 	}
 	defer os.Remove(next) // no-op after the rename
 	if err := DryRun(ctx, next, rel.Tag); err != nil {
 		return err
 	}
 	if err := keepPrev(dest); err != nil {
-		return fmt.Errorf("keep the current binary as %s%s: %w", dest, PrevSuffix, err)
+		return fmt.Errorf("%w %s%s: %w", ErrCantWrite, dest, PrevSuffix, err)
 	}
 	if err := os.Rename(next, dest); err != nil {
-		return err
+		return fmt.Errorf("%w %s: %w", ErrCantWrite, dest, err)
 	}
-	return recordVersion(dest, rel.Tag)
+	if err := recordVersion(dest, rel.Tag); err != nil {
+		return fmt.Errorf("%w (%s): %w", ErrNotRecorded, VersionRecord(dest), err)
+	}
+	return nil
 }
 
 // DryRun runs `<bin> version` and checks it reports tag: a binary that
@@ -69,14 +82,23 @@ func DryRun(ctx context.Context, bin string, tag Tag) error {
 }
 
 // VersionRecord is install.sh's record of the installed tag for the
-// binary at dest: <dir without /bin>/share/nomadware-releases/waker.version.
+// binary at dest: <prefix>/share/nomadware-releases/waker.version for a
+// binary in <prefix>/bin, the only places install.sh installs to; ""
+// for any other directory (nothing is recorded).
 func VersionRecord(dest string) string {
-	dir := strings.TrimSuffix(filepath.Dir(dest), "/bin")
-	return filepath.Join(dir, "share", "nomadware-releases", Product+".version")
+	dir := filepath.Dir(dest)
+	prefix := filepath.Dir(dir)
+	if filepath.Base(dir) != "bin" || prefix == "/" || !filepath.IsAbs(prefix) {
+		return ""
+	}
+	return filepath.Join(prefix, "share", "nomadware-releases", Product+".version")
 }
 
 func recordVersion(dest string, tag Tag) error {
 	rec := VersionRecord(dest)
+	if rec == "" {
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(rec), 0o755); err != nil {
 		return err
 	}
@@ -90,12 +112,7 @@ func keepPrev(dest string) error {
 	tmp := prev + ".tmp"
 	_ = os.Remove(tmp)
 	if err := os.Link(dest, tmp); err != nil {
-		src, err := os.Open(dest)
-		if err != nil {
-			return err
-		}
-		defer src.Close()
-		b, err := io.ReadAll(src)
+		b, err := os.ReadFile(dest)
 		if err != nil {
 			return err
 		}

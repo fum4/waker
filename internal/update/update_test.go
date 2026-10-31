@@ -167,8 +167,48 @@ func TestInstall(t *testing.T) {
 	if _, err := os.Stat(dest + ".new"); !os.IsNotExist(err) {
 		t.Error("dest.new left behind")
 	}
+	// The same build again: unchanged, and a lost record is repaired.
+	if err := os.Remove(update.VersionRecord(dest)); err != nil {
+		t.Fatal(err)
+	}
 	if err := update.Install(ctx, update.Release{Tag: tag, Binary: updatetest.Script("v1.2.3")}, dest); !errors.Is(err, update.ErrUnchanged) {
 		t.Errorf("same build again: err = %v", err)
+	}
+	if got := string(read(t, update.VersionRecord(dest))); got != "v1.2.3\n" {
+		t.Errorf("record not repaired: %q", got)
+	}
+}
+
+func TestVersionRecordOnlyForABinDir(t *testing.T) {
+	for dest, want := range map[string]string{
+		"/usr/local/bin/waker": "/usr/local/share/nomadware-releases/waker.version",
+		"/opt/waker/waker":     "",
+		"/bin/waker":           "",
+	} {
+		if got := update.VersionRecord(dest); got != want {
+			t.Errorf("VersionRecord(%s) = %q, want %q", dest, got, want)
+		}
+	}
+}
+
+func TestParseVersion(t *testing.T) {
+	v040, _ := update.ParseTag("v0.4.0")
+	v041, _ := update.ParseTag("v0.4.1")
+	tests := []struct {
+		in                 string
+		older040, older041 bool
+	}{
+		{"0.4.0", false, true},
+		{"v0.4.1-0.20261030120000-abcdef123456", false, true},
+		{"v0.4.1-rc1", false, true},
+		{"0.4.1", false, false},
+		{"dev", true, true},
+	}
+	for _, tc := range tests {
+		v := update.ParseVersion(tc.in)
+		if v.OlderThan(v040) != tc.older040 || v.OlderThan(v041) != tc.older041 {
+			t.Errorf("%s: older than v0.4.0 = %v, v0.4.1 = %v", tc.in, v.OlderThan(v040), v.OlderThan(v041))
+		}
 	}
 }
 

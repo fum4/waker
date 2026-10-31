@@ -6,7 +6,6 @@
 package update
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	_ "embed"
@@ -187,11 +186,4 @@ func (s Source) get(ctx context.Context, path string, limit int64) ([]byte, erro
 		return nil, fmt.Errorf("fetch %s: larger than %d bytes", u, limit)
 	}
 	return b, nil
-}
-
-// sameBytes reports whether path already holds b (install.sh's "already
-// this build").
-func sameBytes(path string, b []byte) bool {
-	cur, err := os.ReadFile(path)
-	return err == nil && bytes.Equal(cur, b)
 }

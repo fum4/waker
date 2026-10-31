@@ -5,9 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
-	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/fum4/waker/internal/service"
@@ -26,7 +25,7 @@ var executable = os.Executable
 // releaseSource is where releases come from and the key that signs them
 // (tests serve a fixture release signed with their own key).
 var releaseSource = func() update.Source {
-	return update.Source{Base: update.Base(), Key: update.ReleaseKey(), Client: &http.Client{Timeout: updateTimeout}}
+	return update.Source{Base: update.Base(), Key: update.ReleaseKey()} // the caller's context bounds every request
 }
 
 // runUpdate installs the latest release (or --version) over this binary,
@@ -48,11 +47,7 @@ func runUpdate(args []string, stdout, stderr io.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), updateTimeout)
 	defer cancel()
 	src := releaseSource()
-	cur, curErr := update.ParseTag(version.String()) // a dev build has no tag
-	curName := version.String()
-	if curErr == nil {
-		curName = cur.String()
-	}
+	cur := update.ParseVersion(version.String())
 
 	var tag update.Tag
 	var err error
@@ -65,22 +60,24 @@ func runUpdate(args []string, stdout, stderr io.Writer) error {
 	}
 
 	switch {
-	case *check && (curErr != nil || tag.Compare(cur) > 0):
-		fmt.Fprintf(stdout, "waker %s → %s available: run `waker update`\nchanges: %s\n", curName, tag, update.ChangelogURL(tag))
+	case *check && cur.OlderThan(tag):
+		fmt.Fprintf(stdout, "waker %s → %s available: run `waker update`\nchanges: %s\n", cur, tag, update.ChangelogURL(tag))
 		return nil
-	case *check:
-		fmt.Fprintf(stdout, "waker %s is up to date (latest: %s)\n", curName, tag)
-		return nil
-	case *want == "" && curErr == nil && tag.Compare(cur) <= 0:
+	case *check, *want == "" && !cur.OlderThan(tag):
 		// install.sh's downgrade guard: latest never takes you back.
-		fmt.Fprintf(stdout, "waker %s is up to date (latest: %s)\n", curName, tag)
+		fmt.Fprintf(stdout, "waker %s is up to date (latest: %s)\n", cur, tag)
 		return nil
-	case *want != "" && curErr == nil && tag == cur:
-		fmt.Fprintf(stdout, "waker %s is already installed\n", curName)
+	case *want != "" && cur.Known && !cur.Pre && tag == cur.Core:
+		fmt.Fprintf(stdout, "waker %s is already installed\n", cur)
 		return nil
 	}
 
-	dest, err := executable()
+	exe, err := executable()
+	if err != nil {
+		return fmt.Errorf("find the waker binary: %w", err)
+	}
+	// The real file: replacing a symlink would detach whatever manages it.
+	dest, err := filepath.EvalSymlinks(exe)
 	if err != nil {
 		return fmt.Errorf("find the waker binary: %w", err)
 	}
@@ -93,14 +90,26 @@ func runUpdate(args []string, stdout, stderr io.Writer) error {
 	case errors.Is(err, update.ErrUnchanged):
 		fmt.Fprintf(stdout, "%s is already this build\n", dest)
 		return nil
-	case errors.Is(err, fs.ErrPermission):
-		argv := append([]string{"sudo", dest, "update"}, args...)
-		return fmt.Errorf("can't replace %s (%v); run:\n  %s", dest, err, service.ShellJoin(argv))
+	case errors.Is(err, update.ErrCantWrite):
+		return fmt.Errorf("%v; run:\n  %s", err, sudoUpdateLine(dest, tag))
+	case errors.Is(err, update.ErrNotRecorded):
+		fmt.Fprintf(stderr, "warning: %v\n", err)
 	case err != nil:
 		return err
 	}
-	fmt.Fprintf(stdout, "updated waker %s → %s (%s; the old one is %s%s)\n", curName, tag, dest, dest, update.PrevSuffix)
+	fmt.Fprintf(stdout, "updated waker %s → %s (%s; the old one is %s%s)\n", cur, tag, dest, dest, update.PrevSuffix)
 	fmt.Fprintf(stdout, "changes: %s\n", update.ChangelogURL(tag))
 	fmt.Fprintln(stdout, "restart to apply: waker restart")
 	return nil
+}
+
+// sudoUpdateLine installs the release just verified as root: pinned to its
+// tag (latest may move), from the same release home (sudo drops the
+// environment).
+func sudoUpdateLine(dest string, tag update.Tag) string {
+	argv := []string{"sudo"}
+	if b := os.Getenv(update.EnvBase); b != "" {
+		argv = append(argv, "env", update.EnvBase+"="+b)
+	}
+	return service.ShellJoin(append(argv, dest, "update", "--version", tag.String()))
 }
