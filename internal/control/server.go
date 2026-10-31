@@ -22,6 +22,7 @@ import (
 
 	"github.com/fum4/waker/internal/app"
 	"github.com/fum4/waker/internal/config"
+	"github.com/fum4/waker/internal/state"
 )
 
 // Backend is what the control API drives (the daemon).
@@ -33,8 +34,13 @@ type Backend interface {
 	SetMode(name string, mode *config.Mode, idle time.Duration) (app.Snapshot, error)
 }
 
-// Report is GET /status: the effective memory policy and every app.
+// Report is GET /status: the daemon's version, its update record, the
+// effective memory policy and every app.
 type Report struct {
+	Version string `json:"version"`
+	// Update is state_dir/update.json: the last check, the last automatic
+	// update and its outcome, blocked tags. Nil when unreadable.
+	Update *state.Update  `json:"update,omitempty"`
 	Policy Policy         `json:"policy"`
 	Apps   []app.Snapshot `json:"apps"`
 }

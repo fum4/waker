@@ -22,17 +22,29 @@ func runServe(args []string, _, stderr io.Writer) error {
 	if fs.NArg() > 0 {
 		return fmt.Errorf("%w: unexpected argument %q", errUsage, fs.Arg(0))
 	}
-	cfgPath := config.ResolvePath(*cfgFlag)
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		return err
-	}
 	var h slog.Handler = slog.NewTextHandler(stderr, nil)
 	if *jsonLogs {
 		h = slog.NewJSONHandler(stderr, nil)
 	}
 	log := slog.New(h)
+	// An update in flight is resumed or rolled back before anything else:
+	// the new binary may be what can't load the config.
+	exe, exeErr := binaryPath()
+	if exeErr == nil && resumeUpdate(exe, log) {
+		return reexec(exe)
+	}
+	cfgPath := config.ResolvePath(*cfgFlag)
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return err
+	}
 	log.Info("waker starting", "version", version.String(), "apps", len(cfg.Apps))
+	if exeErr == nil {
+		settleUpdate(cfg, exe, log)
+		if autoUpdate(cfg, cfgPath, exe, log) {
+			return reexec(exe)
+		}
+	}
 	// Before binding: a re-exec leaves nothing half-started.
 	switch selfHeal(cfg, cfgPath, log) {
 	case healReexec:
@@ -45,6 +57,9 @@ func runServe(args []string, _, stderr io.Writer) error {
 	d, err := daemon.New(cfg, log)
 	if err != nil {
 		return err
+	}
+	if exeErr == nil {
+		d.OnReady(func() { finishUpdate(cfg, exe, log) })
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

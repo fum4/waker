@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fum4/waker/internal/config"
+	"github.com/fum4/waker/internal/control"
 	"github.com/fum4/waker/internal/state"
 	"github.com/fum4/waker/internal/update"
 	"github.com/fum4/waker/internal/update/updatetest"
@@ -100,21 +101,31 @@ func TestUpdateCheckOnlyForReleaseBuilds(t *testing.T) {
 	}
 }
 
-// status shows what the last check recorded, and never asks itself.
-func TestKnownUpdateIsOffline(t *testing.T) {
-	fakeRelease(t, "0.3.0") // nothing published: a request would find nothing
-	cfg, err := config.Load(checkConfig(t, ""))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if l := knownUpdate(cfg); l != "" {
-		t.Errorf("no record: %q", l)
-	}
-	if err := state.SaveUpdate(cfg.StateDir, state.Update{CheckedAt: time.Now(), Latest: "v0.4.0"}); err != nil {
-		t.Fatal(err)
-	}
-	if l := knownUpdate(cfg); l != hintLine {
-		t.Errorf("= %q, want %q", l, hintLine)
+// status shows the daemon's record: a newer release than the daemon runs,
+// and an automatic update that didn't apply.
+func TestRenderUpdate(t *testing.T) {
+	at := time.Date(2026, 10, 31, 12, 0, 0, 0, time.Local)
+	for _, tc := range []struct {
+		name string
+		r    control.Report
+		want []string
+	}{
+		{"no record", control.Report{Version: "0.3.0"}, nil},
+		{"newer", control.Report{Version: "0.3.0", Update: &state.Update{Latest: "v0.4.0"}}, []string{hintLine}},
+		{"up to date", control.Report{Version: "0.4.0", Update: &state.Update{Latest: "v0.4.0"}}, nil},
+		{"applied", control.Report{Version: "0.4.0", Update: &state.Update{
+			Last: &state.Attempt{At: at, From: "v0.3.0", To: "v0.4.0", Outcome: state.UpdateApplied}}}, nil},
+		{"rolled back", control.Report{Version: "0.3.0", Update: &state.Update{
+			Last: &state.Attempt{At: at, From: "v0.3.0", To: "v0.4.0", Outcome: state.UpdateRolledBack, Detail: "v0.4.0 didn't reach serving"}}},
+			[]string{"last automatic update: v0.3.0 → v0.4.0 rolled-back, 2026-10-31 12:00 (v0.4.0 didn't reach serving)"}},
+	} {
+		var b strings.Builder
+		renderUpdate(&b, tc.r)
+		got := strings.Fields(strings.TrimSpace(b.String()))
+		want := strings.Fields(strings.Join(tc.want, "\n"))
+		if strings.Join(got, " ") != strings.Join(want, " ") {
+			t.Errorf("%s: %q, want %q", tc.name, b.String(), tc.want)
+		}
 	}
 }
 

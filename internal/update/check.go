@@ -70,15 +70,6 @@ func (c Check) Latest(ctx context.Context) (tag Tag, ok bool) {
 	return recorded(rec)
 }
 
-// Known is the tag the last check recorded, without asking anyone.
-func (c Check) Known() (Tag, bool) {
-	rec, err := state.LoadUpdate(c.StateDir)
-	if err != nil {
-		return Tag{}, false
-	}
-	return recorded(rec)
-}
-
 func (c Check) now() time.Time {
 	if c.Now != nil {
 		return c.Now()

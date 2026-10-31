@@ -49,11 +49,12 @@ How `waker service install` writes and runs the unit (systemd) or job (launchd).
 
 ## `update`
 
-Whether waker looks for newer releases. It never installs one by itself: `waker update` does ([README § Updating](../README.md#updating)).
+Whether waker looks for newer releases, and whether it installs them. Without `auto` it never installs one by itself: `waker update` does ([README § Updating](../README.md#updating)).
 
 | Key | Default | Meaning |
 |---|---|---|
 | `check` | `true` | Once a day, one GET of `https://releases.nomadware.io/waker/latest` (no identifiers sent), recorded in `<state_dir>/update.json`. A newer release is logged by `waker serve`, printed by `waker status` (from the last check), and shown as a dim stderr line after CLI commands succeed on a terminal (not as root). Only release builds check. `false`: never. `WAKER_NO_UPDATE_CHECK=1` in the environment turns it off whatever the file says. |
+| `auto` | `false` | `true`: at `waker serve`'s start, at most once a day, install a newer release (verified, dry-run against this config, `waker.prev` kept) and re-execute into it. A new binary that rejects the config, or never reaches serving (its next start finds `waker.update-pending` beside the binary), is rolled back and its tag blocked. The outcome is in `update.json` and in `waker status --json` under `update`. `WAKER_NO_UPDATE_CHECK=1` turns it off too. |
 
 `waker check --effective` prints the resolved block.
 

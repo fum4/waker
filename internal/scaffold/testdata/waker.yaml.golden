@@ -22,6 +22,7 @@ apps:
 #  user:    ""      # system: true only; default: the installing user
 
 # Whether waker looks for a newer release (one request a day to
-# releases.nomadware.io; it never installs one by itself). The default:
+# releases.nomadware.io) and installs it. The defaults:
 # update:
-#  check: true  # false: never look (or set WAKER_NO_UPDATE_CHECK=1)
+#  check: true   # false: never look (or set WAKER_NO_UPDATE_CHECK=1)
+#  auto:  false  # true: serve installs it at start, rolls back if it fails

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -9,7 +10,9 @@ import (
 	"time"
 
 	"github.com/fum4/waker/internal/config"
+	"github.com/fum4/waker/internal/control"
 	"github.com/fum4/waker/internal/prompt"
+	"github.com/fum4/waker/internal/state"
 	"github.com/fum4/waker/internal/update"
 	"github.com/fum4/waker/internal/version"
 )
@@ -34,12 +37,18 @@ var stderrTerminal = func(w io.Writer) bool {
 // config turns it off, WAKER_NO_UPDATE_CHECK is set or this isn't a clean
 // release build (a dev, pseudo-version or +dirty build has no release).
 func updateCheck(cfg *config.Config) (c update.Check, ok bool) {
-	s := version.String()
-	v := update.ParseVersion(s)
-	if !cfg.Update.Checks() || !update.Unattended() || !v.Known || v.Pre || strings.Contains(s, "+") {
+	if !cfg.Update.Checks() || !update.Unattended() || !releaseBuild() {
 		return update.Check{}, false
 	}
 	return update.Check{Source: releaseSource(), StateDir: cfg.StateDir}, true
+}
+
+// releaseBuild reports whether this binary is a clean release, the only
+// kind a release can replace (not dev, a pseudo-version or +dirty).
+func releaseBuild() bool {
+	s := version.String()
+	v := update.ParseVersion(s)
+	return v.Known && !v.Pre && !strings.Contains(s, "+")
 }
 
 // available is the "newer release" line for tag, or "".
@@ -50,14 +59,26 @@ func available(tag update.Tag, ok bool) string {
 	return update.Available(update.ParseVersion(version.String()), tag)
 }
 
-// knownUpdate is the line for the last recorded check, without a request
-// (status: it must stay fast and offline).
-func knownUpdate(cfg *config.Config) string {
-	c, ok := updateCheck(cfg)
-	if !ok {
-		return ""
+// renderUpdate prints the daemon's update record for status: a newer
+// release than the daemon runs, and how the last automatic update ended.
+// It reads the report, so it works across users and makes no request.
+func renderUpdate(w io.Writer, r control.Report) {
+	u := r.Update
+	if u == nil {
+		return
 	}
-	return available(c.Known())
+	if t, err := update.ParseTag(u.Latest); err == nil {
+		if l := update.Available(update.ParseVersion(r.Version), t); l != "" {
+			fmt.Fprintf(w, "\n%s\n", l)
+		}
+	}
+	if a := u.Last; a != nil && a.Outcome != state.UpdateApplied {
+		line := fmt.Sprintf("last automatic update: %s → %s %s, %s", a.From, a.To, a.Outcome, a.At.Local().Format("2006-01-02 15:04"))
+		if a.Detail != "" {
+			line += " (" + a.Detail + ")"
+		}
+		fmt.Fprintf(w, "%s\n", line)
+	}
 }
 
 // startHint looks for a newer release while a CLI command runs; the
