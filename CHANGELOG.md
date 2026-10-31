@@ -5,6 +5,7 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
 ## [Unreleased]
 
 ### Added
+- `waker update [--version vX.Y.Z] [--check]` installs a signed release over the running binary, verified the way install.sh verifies it: the SSH signature (checked natively, with no OpenSSH needed), RELEASE `waker <tag>`, and the checksum. The new binary must then run and report its tag. The swap is atomic, the old binary is kept as `waker.prev`, and the version is recorded where install.sh records it. It prints old → new, the CHANGELOG link and "restart to apply: waker restart", and never restarts. It never downgrades without `--version`, and prints the `sudo` line when the binary isn't writable.
 - A `service:` block in waker.yaml (`restart`, `path`, `system`, `start`, `env`, `user`; all optional) that `waker service install` and `uninstall` read. Flags override it for one run; `--restart` is new. Validated with field paths (`service.restart: "sometimes" must be always, on-failure or never`) and shown by `waker check --effective`. `waker init` writes it commented out, with every default visible.
 - Drift warning: when the installed waker-written unit differs from the one waker.yaml describes (an edited `service:` block, or a waker upgrade that writes units differently), `waker check`, `waker status` and the startup log say so and print the `waker restart` line.
 - docs/configuration.md § When changes apply.

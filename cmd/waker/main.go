@@ -37,6 +37,7 @@ func commands() []command {
 		{"setup", "init (if there is no config yet), then install the service", func(a []string, o, e io.Writer) error { return aborted(runSetup(a, o, e)) }},
 		{"service", "install|uninstall|status: run waker as a systemd or launchd service", runService},
 		{"restart", "restart the service so it runs what waker.yaml says now (rewrites a stale unit first)", runRestart},
+		{"update", "install the latest signed release (or --version) over this binary; --check only looks", runUpdate},
 		{"version", "print the waker version", runVersion},
 	}
 }
