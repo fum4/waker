@@ -32,8 +32,8 @@ const UserBinDir = "~/.local/bin"
 var envNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // Service is how `waker service install` runs waker. The supervisor reads
-// the unit it writes, not this block: a change applies on the next
-// `waker service install`.
+// the unit it writes, not this block: serve rewrites a stale unit at start
+// (systemd), `waker restart` and `waker service install` at once.
 type Service struct {
 	// Restart: always, on-failure or never.
 	Restart Restart `yaml:"restart"`

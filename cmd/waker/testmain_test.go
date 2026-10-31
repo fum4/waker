@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -40,13 +41,34 @@ var ran recorder
 type recorder struct {
 	mu    sync.Mutex
 	calls []string
+	// mainPID is the MainPID `systemctl show` reports (0: none).
+	mainPID int
+	// fail makes a command with this argument fail (tests set and reset it).
+	fail string
 }
 
 func (r *recorder) Run(argv ...string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.calls = append(r.calls, strings.Join(argv, " "))
+	if r.fail != "" && slices.Contains(argv, r.fail) {
+		return "boom", fmt.Errorf("exit status 1")
+	}
+	if slices.Contains(argv, "show") && r.mainPID != 0 {
+		return fmt.Sprintf("MainPID=%d\n", r.mainPID), nil
+	}
 	return "", nil
+}
+
+// setMainPID makes `systemctl show` report pid until the test ends.
+func (r *recorder) setMainPID(t *testing.T, pid int) {
+	set := func(p int) {
+		r.mu.Lock()
+		r.mainPID = p
+		r.mu.Unlock()
+	}
+	set(pid)
+	t.Cleanup(func() { set(0) })
 }
 
 // take returns the commands recorded since the last take.

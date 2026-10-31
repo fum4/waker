@@ -147,10 +147,6 @@ func driftMessage(cfg *config.Config, cfgPath string) string {
 	if err != nil || d != service.DriftStale {
 		return ""
 	}
-	argv := []string{"waker", "restart", "--config", sp.Config}
-	if sp.System {
-		argv = append([]string{"sudo"}, argv...)
-	}
 	return fmt.Sprintf("%s differs from the service waker.yaml describes (its service: block, or this waker version); apply it with: %s",
-		unit, service.ShellJoin(argv))
+		unit, restartLine(sp))
 }

@@ -27,8 +27,8 @@ waker reads the file once, at start. There is no file watch and no SIGHUP.
 
 | What you change | Applies |
 |---|---|
-| any app key, `defaults`, `resources`, `state_dir`, `control_socket` | at waker's next start: `systemctl --user restart waker`, a crash restart, a reboot |
-| `service:` | at the next `waker restart`, which rewrites the unit and restarts waker (or `waker service install`, which restarts unless `start: false`). The supervisor reads the unit, not this file. Until then, `waker check`, `waker status` and waker's startup log warn that the installed unit differs, with the command to run. |
+| any app key, `defaults`, `resources`, `state_dir`, `control_socket` | at waker's next start: `waker restart`, `systemctl --user restart waker`, a crash restart, a reboot |
+| `service:` | at waker's next start, the same way: on start, waker rewrites a stale unit it wrote and reloads systemd, then exits once so the supervisor restarts it when `path`, `env` or `user` changed ([README § As a service](../README.md#as-a-service), "Changing it", says when it can't and logs the command instead). `waker restart` does it at once. On launchd, only `waker restart` (or `waker service install`) applies it. Until then, `waker check`, `waker status` and waker's startup log warn that the installed unit differs, with the command to run. |
 | an app's mode or idle, at runtime | at once: `waker mode` / `waker reset` talk to the running daemon, and the override outlives restarts until reset |
 
 ## `service`
