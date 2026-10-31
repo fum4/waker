@@ -79,7 +79,7 @@ func (s *pendingSave) write(stdout io.Writer) error {
 	}
 	now, err := os.ReadFile(s.path)
 	if err == nil && !bytes.Equal(now, s.orig) {
-		err = fmt.Errorf("it changed while waker installed")
+		err = fmt.Errorf("it changed while waker ran")
 	}
 	if err == nil {
 		err = config.WriteFile(s.path, s.data)

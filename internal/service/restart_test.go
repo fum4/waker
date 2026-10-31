@@ -38,7 +38,7 @@ func TestPlanRestart(t *testing.T) {
 				t.Fatalf("current = %+v, %v, %v", cur, d, err)
 			}
 			want := map[string][]string{
-				"linux":  {"systemctl --user restart waker.service"},
+				"linux":  {"systemctl --user daemon-reload", "systemctl --user restart waker.service"},
 				"darwin": {"launchctl bootout gui/501/io.nomadware.waker", "launchctl bootstrap gui/501 " + cur.Unit},
 			}[h.OS]
 			if got := commands(cur); strings.Join(got, "\n") != strings.Join(want, "\n") {

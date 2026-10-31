@@ -20,12 +20,20 @@ func runRestart(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if flagGiven(fs, "no-start") {
+		return fmt.Errorf("%w: --no-start: restart always starts waker; set start: false for `waker service install`", errUsage)
+	}
 	plan, drift, err := service.PlanRestart(r.h, r.sp)
-	if err := r.planned(err, stderr); err != nil {
+	if err != nil {
 		return err
 	}
 	if drift == service.DriftNotOurs {
+		if len(sf.given()) > 0 {
+			return fmt.Errorf("%w: %s wasn't written by waker, so service flags can't apply to it: drop them, or replace it with `waker service install --force`", errUsage, plan.Unit)
+		}
 		fmt.Fprintf(stderr, "warning: %s wasn't written by waker, so restart doesn't rewrite it: it restarts it as it is\n", plan.Unit)
+	} else {
+		r.warnPATH(stderr)
 	}
 	if *dryRun {
 		r.printDryRun(plan, stdout, stderr)

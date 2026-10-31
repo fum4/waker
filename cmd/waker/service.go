@@ -41,10 +41,13 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	r.pinRunAs = true
 	plan, err := service.PlanInstall(r.h, r.sp)
-	if err := r.planned(err, stderr); err != nil {
+	r.manualSteps(err, stderr)
+	if err != nil {
 		return err
 	}
+	r.warnPATH(stderr)
 	if *dryRun {
 		r.printDryRun(plan, stdout, stderr)
 		return nil

@@ -24,6 +24,8 @@ type serviceRun struct {
 	save    *pendingSave
 	saveErr error // why the flags can't be saved (a managed file)
 	noSave  bool
+	// pinRunAs adds --run-as to the sudo line (install).
+	pinRunAs bool
 }
 
 // newServiceRun parses fs (the service flags already on it), loads the
@@ -59,20 +61,20 @@ func newServiceRun(verb []string, fs *flag.FlagSet, cfgFlag *string, sf *service
 	return r, nil
 }
 
-// planned reports a plan error, printing the manual steps where no
-// service manager is supported, then warns about start commands missing
-// from the service's PATH.
-func (r *serviceRun) planned(err error, stderr io.Writer) error {
+// manualSteps prints, where no service manager is supported, how to run
+// waker by hand (install's answer to ErrUnsupported).
+func (r *serviceRun) manualSteps(err error, stderr io.Writer) {
 	if errors.Is(err, service.ErrUnsupported) {
 		fmt.Fprintln(stderr, service.ManualSteps(r.sp))
 	}
-	if err != nil {
-		return err
-	}
+}
+
+// warnPATH warns about start and stop commands missing from the
+// service's PATH.
+func (r *serviceRun) warnPATH(stderr io.Writer) {
 	for _, w := range pathWarnings(r.cfg, r.sp.PATH, r.sp.WorkDir) {
 		fmt.Fprintf(stderr, "warning: %s\n", w)
 	}
-	return nil
 }
 
 // printDryRun prints the plan and what the real run would save (or why
@@ -96,10 +98,14 @@ func (r *serviceRun) ready() error {
 	}
 	if r.sp.System && r.h.EUID != 0 {
 		// The same flags (the file holds the rest); the last --config wins,
-		// made absolute for root's working directory. --run-as pins you,
-		// whom sudo would otherwise hide.
+		// made absolute for root's working directory. install's --run-as
+		// pins you, whom sudo would otherwise hide (and saves it); restart
+		// applies the file as it is, and sudo's $SUDO_USER is the same you.
 		argv := append(append([]string{"sudo", r.sp.Binary}, r.verb...), r.args...)
-		argv = append(argv, "--run-as", r.sp.RunAs, "--config", r.cfgPath)
+		if r.pinRunAs {
+			argv = append(argv, "--run-as", r.sp.RunAs)
+		}
+		argv = append(argv, "--config", r.cfgPath)
 		return fmt.Errorf("a system service needs root; run:\n  %s", service.ShellJoin(argv))
 	}
 	if !r.sp.System && r.h.EUID == 0 && r.h.OS == "linux" {

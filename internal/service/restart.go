@@ -23,29 +23,44 @@ func PlanRestart(h Host, sp Spec) (Plan, Drift, error) {
 	if err != nil {
 		return Plan{}, d, err
 	}
+	sp.NoStart = false // a restart always restarts; start: false is install's
+	ip, err := m.install(sp)
+	if err != nil {
+		return Plan{}, d, err
+	}
 	switch d {
 	case DriftNotInstalled:
+		other := sp
+		other.System = !sp.System
+		if od, ounit, _ := CheckDrift(h, other); od != DriftNotInstalled {
+			return Plan{}, d, fmt.Errorf("%w in the %s scope, but one is in the %s scope (%s): set service.system: %t in waker.yaml, or pass --system=%t",
+				ErrNotInstalled, scopeName(sp.System), scopeName(other.System), ounit, other.System, other.System)
+		}
 		return Plan{}, d, fmt.Errorf("%w (%s): install it with `waker service install`", ErrNotInstalled, unit)
 	case DriftStale:
-		sp.NoStart = false // a restart always restarts; start: false is install's
-		p, err := m.install(sp)
-		return p, d, err
+		return ip, d, nil
 	}
-	return m.restart(sp.System), d, nil
+	p := m.restart(sp.System)
+	p.MkDirs, p.Notes = ip.MkDirs, ip.Notes // the same log dir and notes either way
+	return p, d, nil
 }
 
-// restart restarts the unit as installed: systemctl restart starts a
-// stopped one too.
+// restart restarts the unit as installed. daemon-reload first, so a unit
+// edited on disk (a hand-written one) is the one that runs; systemctl
+// restart starts a stopped unit too.
 func (s systemd) restart(system bool) Plan {
 	return Plan{
 		Unit: s.unitPath(system),
-		Post: []Command{{Argv: s.ctl(system, "restart", UnitName)}},
+		Post: []Command{
+			{Argv: s.ctl(system, "daemon-reload")},
+			{Argv: s.ctl(system, "restart", UnitName)},
+		},
 	}
 }
 
 // restart reloads the job: bootout (ignored when it isn't loaded, e.g.
-// after --no-start) then bootstrap, so it also starts a job that isn't
-// loaded, which `launchctl kickstart -k` can't.
+// after --no-start) then bootstrap, which reads the plist again and also
+// starts a job that isn't loaded, which `launchctl kickstart -k` can't.
 func (l launchd) restart(system bool) Plan {
 	return Plan{
 		Unit: l.unitPath(system),

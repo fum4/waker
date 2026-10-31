@@ -22,6 +22,9 @@ func installed(t *testing.T, path string) string {
 
 const restartCmd = "systemctl --user restart waker.service"
 
+// restarted is what restarting an installed user unit runs.
+var restarted = []string{"systemctl --user daemon-reload", restartCmd}
+
 func TestRestartNotInstalled(t *testing.T) {
 	fakeHost(t, 1000)
 	path := writeConfigFile(t, commented)
@@ -43,7 +46,7 @@ func TestRestartCurrentUnitOnlyRestarts(t *testing.T) {
 	if code != 0 || !strings.Contains(stdout, "restarted;") || strings.Contains(stdout, "rewrote") {
 		t.Fatalf("= %d\n%s%s", code, stdout, stderr)
 	}
-	if calls := ran.take(); !slices.Equal(calls, []string{restartCmd}) {
+	if calls := ran.take(); !slices.Equal(calls, restarted) {
 		t.Errorf("calls = %q, want only the restart", calls)
 	}
 	if readString(t, unit) != before {
@@ -116,7 +119,7 @@ func TestRestartLeavesAHandWrittenUnit(t *testing.T) {
 	if code != 0 || !strings.Contains(stderr, "wasn't written by waker") {
 		t.Fatalf("= %d\n%s%s", code, stdout, stderr)
 	}
-	if calls := ran.take(); !slices.Equal(calls, []string{restartCmd}) {
+	if calls := ran.take(); !slices.Equal(calls, restarted) {
 		t.Errorf("calls = %q", calls)
 	}
 	if readString(t, unit) != "[Service]\nExecStart=/mine\n" {
@@ -134,7 +137,7 @@ func TestRestartSystemNeedsRoot(t *testing.T) {
 	}
 	writeFile(t, unit, "x\n") // installed (not ours: the sudo line comes first anyway)
 	code, _, stderr := runCLI("restart", "--config", path)
-	if code != 1 || !strings.Contains(stderr, "sudo ") || !strings.Contains(stderr, " restart --config ") || !strings.HasSuffix(stderr, "--run-as ana --config "+path+"\n") {
+	if code != 1 || !strings.Contains(stderr, "sudo ") || !strings.Contains(stderr, " restart --config ") || strings.Contains(stderr, "--run-as") || !strings.HasSuffix(stderr, " --config "+path+"\n") {
 		t.Fatalf("= %d %q", code, stderr)
 	}
 	if calls := ran.take(); len(calls) != 0 {
