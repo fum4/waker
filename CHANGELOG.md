@@ -4,6 +4,12 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+### Added
+- `waker service install --no-start`: write and enable the service without starting or restarting it, for provisioning scripts that decide when to restart. On macOS it writes the plist and prints the `launchctl bootstrap` line.
+
+### Changed
+- `waker service install` writes a service that stays up: systemd `Restart=always` (was `on-failure`), `StartLimitIntervalSec=0` and `Type=exec`; launchd `KeepAlive` true (was only after an unsuccessful exit). waker now comes back after any exit its supervisor didn't ask for, and a crash loop no longer stops it for good. `systemctl stop` / `launchctl bootout` still leave it stopped. **Existing installs:** run `waker service install` again to get the new unit.
+
 ## [0.2.0] - 2026-10-31
 
 ### Added

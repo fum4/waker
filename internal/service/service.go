@@ -36,6 +36,9 @@ type Spec struct {
 	System bool
 	// RunAs is the account a system service runs as.
 	RunAs string
+	// NoStart installs and enables the service without starting or
+	// restarting it: the caller decides when the new unit takes over.
+	NoStart bool
 }
 
 // Host is what the planner knows about the machine: the real one in
@@ -135,7 +138,7 @@ func ManualSteps(s Spec) string {
 	return fmt.Sprintf(`Run waker under your init system or process supervisor:
   command:  %s
   env:      PATH=%s
-  restart:  on failure
+  restart:  always, with no start limit
   logs:     stderr`, ShellJoin([]string{s.Binary, "serve", "--config", s.Config}), s.PATH)
 }
 

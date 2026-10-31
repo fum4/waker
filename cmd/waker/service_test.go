@@ -93,6 +93,9 @@ func TestServiceSystemNeedsRoot(t *testing.T) {
 	if code != 1 || !strings.Contains(stderr, "needs root; run:\n  sudo ") || !strings.Contains(stderr, "--system --config "+cfg+" --run-as ana --path ") {
 		t.Fatalf("= %d, %q", code, stderr)
 	}
+	if code, _, stderr := runCLI("service", "install", "--system", "--no-start", "--config", cfg); code != 1 || !strings.Contains(stderr, " --no-start") {
+		t.Fatalf("--no-start: the sudo line drops it: %d, %q", code, stderr)
+	}
 	if code, _, stderr := runCLI("service", "uninstall", "--system"); code != 1 || !strings.Contains(stderr, "service uninstall --system") {
 		t.Fatalf("uninstall = %d, %q", code, stderr)
 	}

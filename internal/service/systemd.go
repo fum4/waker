@@ -38,9 +38,11 @@ func (s systemd) install(sp Spec) (Plan, error) {
 		Post: []Command{
 			{Argv: s.ctl(sp.System, "daemon-reload")},
 			{Argv: s.ctl(sp.System, "enable", UnitName)},
-			// restart, not start: a reinstall applies the new unit.
-			{Argv: s.ctl(sp.System, "restart", UnitName)},
 		},
+	}
+	if !sp.NoStart {
+		// restart, not start: a reinstall applies the new unit.
+		p.Post = append(p.Post, Command{Argv: s.ctl(sp.System, "restart", UnitName)})
 	}
 	if !sp.System && !s.lingering() {
 		p.Notes = append(p.Notes, "linger is off: the service stops when your last session ends. Keep it running with:\n  "+s.lingerLine())
@@ -99,13 +101,18 @@ func (s systemd) lingerLine() string {
 	return ShellJoin([]string{"sudo", "loginctl", "enable-linger", s.h.User})
 }
 
-// renderUnit writes the unit. Restart=on-failure brings waker back after a
-// crash; a clean stop (systemctl stop, SIGTERM) stays stopped.
+// renderUnit writes the unit. waker fronts every app, so it must stay up:
+// Restart=always brings it back after any exit systemd didn't ask for, and
+// StartLimitIntervalSec=0 keeps a crash loop (a port still held) from
+// leaving it dead for good; RestartSec bounds the churn. A stop through
+// systemctl stays stopped.
 func renderUnit(sp Spec) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n", Marker)
 	b.WriteString("[Unit]\nDescription=waker: scale-to-zero front for self-hosted apps\n")
-	b.WriteString("After=network.target\n\n[Service]\n")
+	b.WriteString("After=network.target\nStartLimitIntervalSec=0\n\n[Service]\n")
+	// exec, not simple: a binary that can't be executed fails the start.
+	b.WriteString("Type=exec\n")
 	fmt.Fprintf(&b, "ExecStart=%s\n", execLine(sp.Binary, "serve", "--config", sp.Config))
 	fmt.Fprintf(&b, "WorkingDirectory=%s\n", unitQuote(sp.WorkDir, false))
 	// The supervisor's PATH is minimal; the installer's PATH is what the
@@ -119,7 +126,7 @@ func renderUnit(sp Spec) string {
 		b.WriteString("RuntimeDirectory=waker\nRuntimeDirectoryMode=0750\n")
 		fmt.Fprintf(&b, "Environment=%s\n", unitQuote(config.EnvControlSocket+"="+config.SystemControlSocket, false))
 	}
-	b.WriteString("Restart=on-failure\nRestartSec=2\n")
+	b.WriteString("Restart=always\nRestartSec=2\n")
 	b.WriteString("# SIGTERM lets waker drain connections and stop the apps it started.\n")
 	b.WriteString("TimeoutStopSec=60\nNoNewPrivileges=true\n\n[Install]\n")
 	if sp.System {

@@ -39,7 +39,7 @@ waker serve
 waker service install               # a systemd user unit (Linux) or a LaunchAgent (macOS)
 ```
 
-It runs `waker serve --config <this file>`, restarts on failure and starts at boot ([details](#as-a-service)). `waker setup` does steps 2 and 4 in one go.
+It runs `waker serve --config <this file>`, restarts whenever it exits and starts at boot ([details](#as-a-service)). `waker setup` does steps 2 and 4 in one go.
 
 ## Configuration
 
@@ -262,7 +262,8 @@ It never overwrites an existing config without `--force`. `--start` is split lik
 
 - **PATH.** A supervisor's PATH is minimal: `npm` or `python3` from your shell wouldn't be found at the first wake. The unit captures the PATH you install from (`--path` overrides it). `waker check` warns about any `start` or `stop` command missing from the installed service's PATH.
 - **Working directory.** It's the config file's directory, so `start: [./bin/api]` works as it does from there.
-- **Restarts.** waker restarts after a crash; `systemctl stop` / `launchctl bootout` leave it stopped.
+- **Restarts.** waker fronts every app, so it comes back whenever it exits, 2 s later, with no start limit (`Restart=always`, `StartLimitIntervalSec=0`; launchd `KeepAlive`). `systemctl stop` / `launchctl bootout` leave it stopped.
+- **Starting.** install (re)starts the service so the new unit takes effect. `--no-start` only writes and enables it: it starts at the next boot (launchd: login), and a running waker keeps the old unit until you restart it. Use it from provisioning scripts that decide themselves when to restart, e.g. `systemctl --user try-restart waker` so a waker you stopped on purpose stays stopped.
 - **Linger (Linux).** A user unit stops when your last session ends unless linger is on. install and status print the exact `sudo loginctl enable-linger <you>` line; waker never runs sudo itself.
 - **Root.** `--system` needs root. Without it, install prints the `sudo …` line to run, with your PATH and user filled in.
 - **Control socket (`--system`, Linux).** A system service has no `XDG_RUNTIME_DIR` to share with your shell, so it listens on `/run/waker/control.sock` (`RuntimeDirectory=waker`). The CLI falls back to that socket when nothing listens on its default, and `waker status` ends with the socket it used.
