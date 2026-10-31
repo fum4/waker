@@ -43,14 +43,22 @@ func (l launchd) target(system bool) string { return l.domain(system) + "/" + La
 func (l launchd) install(sp Spec) (Plan, error) {
 	plist := l.unitPath(sp.System)
 	logs := l.logDir(sp.System)
-	return Plan{
-		Unit: plist,
-		// bootout first: bootstrap refuses a job that is already loaded.
-		Pre:    []Command{{Argv: []string{"launchctl", "bootout", l.target(sp.System)}, Ignore: true}},
+	p := Plan{
+		Unit:   plist,
 		MkDirs: []string{logs},
 		Files:  []File{{Path: plist, Content: renderPlist(sp, filepath.Join(logs, "waker.log"))}},
-		Post:   []Command{{Argv: []string{"launchctl", "bootstrap", l.domain(sp.System), plist}}},
-	}, nil
+	}
+	bootstrap := []string{"launchctl", "bootstrap", l.domain(sp.System), plist}
+	if sp.NoStart {
+		// launchd has no enable without a load: the job loads at the next
+		// login (agent) or boot (daemon).
+		p.Notes = append(p.Notes, "--no-start: the job loads at the next login or boot; load it now with:\n  "+ShellJoin(bootstrap))
+		return p, nil
+	}
+	// bootout first: bootstrap refuses a job that is already loaded.
+	p.Pre = []Command{{Argv: []string{"launchctl", "bootout", l.target(sp.System)}, Ignore: true}}
+	p.Post = []Command{{Argv: bootstrap}}
+	return p, nil
 }
 
 func (l launchd) uninstall(system bool) Plan {
@@ -93,8 +101,8 @@ func (l launchd) status(system bool, r Runner) Status {
 	return st
 }
 
-// renderPlist writes the job. KeepAlive SuccessfulExit=false restarts
-// waker after a crash and leaves a clean exit stopped.
+// renderPlist writes the job. waker fronts every app, so KeepAlive=true
+// relaunches it after any exit; launchctl bootout leaves it stopped.
 func renderPlist(sp Spec, logFile string) string {
 	var b strings.Builder
 	b.WriteString(xml.Header)
@@ -114,7 +122,7 @@ func renderPlist(sp Spec, logFile string) string {
 		key(&b, "UserName", sp.RunAs)
 	}
 	b.WriteString("  <key>RunAtLoad</key>\n  <true/>\n")
-	b.WriteString("  <key>KeepAlive</key>\n  <dict>\n    <key>SuccessfulExit</key>\n    <false/>\n  </dict>\n")
+	b.WriteString("  <key>KeepAlive</key>\n  <true/>\n")
 	b.WriteString("  <key>ExitTimeOut</key>\n  <integer>60</integer>\n")
 	key(&b, "StandardOutPath", logFile)
 	key(&b, "StandardErrorPath", logFile)

@@ -41,6 +41,7 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	runAs := fs.String("run-as", "", "--system: the account waker runs as (default $SUDO_USER, else you)")
 	path := fs.String("path", os.Getenv("PATH"), "the service's PATH (default: this shell's)")
 	force := fs.Bool("force", false, "overwrite a unit that install didn't write")
+	noStart := fs.Bool("no-start", false, "install and enable it, but don't start or restart it (a running waker keeps the old unit until restarted)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -63,7 +64,7 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	sp := service.Spec{Binary: bin, Config: cfgPath, WorkDir: filepath.Dir(cfgPath), PATH: *path, System: *system, RunAs: *runAs}
+	sp := service.Spec{Binary: bin, Config: cfgPath, WorkDir: filepath.Dir(cfgPath), PATH: *path, System: *system, RunAs: *runAs, NoStart: *noStart}
 	if sp.System && sp.RunAs == "" {
 		sp.RunAs = os.Getenv("SUDO_USER")
 		if sp.RunAs == "" {
@@ -87,6 +88,9 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	}
 	if sp.System && h.EUID != 0 {
 		argv := []string{"sudo", bin, "service", "install", "--system", "--config", cfgPath, "--run-as", sp.RunAs, "--path", sp.PATH}
+		if sp.NoStart {
+			argv = append(argv, "--no-start")
+		}
 		return fmt.Errorf("a system service needs root; run:\n  %s", service.ShellJoin(argv))
 	}
 	if !sp.System && h.EUID == 0 && h.OS == "linux" {

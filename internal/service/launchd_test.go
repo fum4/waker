@@ -19,6 +19,22 @@ func darwinHost(t *testing.T) Host {
 	return Host{OS: "darwin", Home: home, User: "ana", UID: 501, EUID: 501, ConfigHome: filepath.Join(home, ".config"), Root: root}
 }
 
+func TestLaunchAgentInstallNoStart(t *testing.T) {
+	h := darwinHost(t)
+	sp := spec()
+	sp.NoStart = true
+	p, err := PlanInstall(h, sp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Pre) != 0 || len(p.Post) != 0 {
+		t.Errorf("--no-start runs launchctl: pre = %+v, post = %+v", p.Pre, p.Post)
+	}
+	if len(p.Files) != 1 || len(p.Notes) != 1 || !strings.Contains(p.Notes[0], "launchctl bootstrap gui/501 "+shellQuote(p.Unit)) {
+		t.Errorf("files = %d, notes = %q, want the plist and the bootstrap line", len(p.Files), p.Notes)
+	}
+}
+
 func TestLaunchAgentInstall(t *testing.T) {
 	h := darwinHost(t)
 	sp := spec()
@@ -37,7 +53,7 @@ func TestLaunchAgentInstall(t *testing.T) {
 		"<string>/srv/my apps/waker.yaml</string>",
 		"<key>WorkingDirectory</key>\n  <string>/srv/my apps</string>",
 		"<string>/opt/homebrew/bin:/usr/bin&amp;more</string>",
-		"<key>SuccessfulExit</key>\n    <false/>",
+		"<key>KeepAlive</key>\n  <true/>",
 		filepath.Join(h.Home, "Library", "Logs", "waker", "waker.log"),
 	} {
 		if !strings.Contains(plist, want) {

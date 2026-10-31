@@ -61,7 +61,10 @@ func TestSystemdUserInstall(t *testing.T) {
 		`ExecStart="/opt/waker/bin/waker" "serve" "--config" "/srv/my apps/waker.yaml"`,
 		`WorkingDirectory="/srv/my apps"`,
 		`Environment="PATH=/home/ana/.local/bin:/usr/bin"`,
-		"Restart=on-failure",
+		"[Unit]\nDescription=waker: scale-to-zero front for self-hosted apps\nAfter=network.target\nStartLimitIntervalSec=0\n",
+		"[Service]\nType=exec\n",
+		"Restart=always\nRestartSec=2\n",
+		"TimeoutStopSec=60\nNoNewPrivileges=true\n",
 		"WantedBy=default.target",
 	} {
 		if !strings.Contains(unit, want) {
@@ -91,6 +94,25 @@ func TestSystemdUserInstall(t *testing.T) {
 	}
 	if p, _ := PlanInstall(h, spec()); len(p.Notes) != 0 {
 		t.Errorf("lingering: notes = %q, want none", p.Notes)
+	}
+}
+
+func TestSystemdInstallNoStart(t *testing.T) {
+	h := linuxHost(t)
+	sp := spec()
+	sp.NoStart = true
+	p, err := PlanInstall(h, sp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cmds []string
+	for _, c := range p.Post {
+		cmds = append(cmds, c.String())
+	}
+	// Enabled for the next boot; whether it (re)starts now is the caller's.
+	want := []string{"systemctl --user daemon-reload", "systemctl --user enable waker.service"}
+	if !slices.Equal(cmds, want) {
+		t.Errorf("post = %q, want %q", cmds, want)
 	}
 }
 
