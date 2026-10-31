@@ -4,6 +4,8 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-31
+
 ### Added
 - `waker update [--version vX.Y.Z] [--check]` installs a signed release over the running binary, verified the way install.sh verifies it: the SSH signature (checked natively, with no OpenSSH needed), RELEASE `waker <tag>`, and the checksum. The new binary must then run and report its tag. The swap is atomic, the old binary is kept as `waker.prev`, and the version is recorded where install.sh records it. It prints old → new, the CHANGELOG link and "restart to apply: waker restart", and never restarts. It never downgrades without `--version`, and prints the `sudo` line when the binary isn't writable.
 - A daily release check, `update: {check: true}` (the default). Once a day (`<state_dir>/update.json`, shared by serve and the CLI), one GET of `https://releases.nomadware.io/waker/latest` with a 5 s timeout (2 s from the CLI), silent on failure, no identifiers. A newer release is logged by `waker serve` (at start and when a new one appears), printed by `waker status` from the last check (it never asks itself), and shown as one dim stderr line after `check`, `mode`, `reset`, `restart`, `service` and `version` succeed on a terminal (not as root). `update.check: false` or `WAKER_NO_UPDATE_CHECK=1` turns it off; only release builds check (not dev, pseudo-version or `+dirty` builds). `waker init` writes the block commented out.
