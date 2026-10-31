@@ -247,8 +247,13 @@ waker service install                # run as a service (--dry-run: print it; --
 waker restart                        # apply waker.yaml now: rewrites a stale unit, then restarts
 waker service status                 # state, pid, where the logs are (exit 3 when not running)
 waker service uninstall              # remove everything install wrote
+waker update                         # install the latest signed release over this binary (--check: only look)
 waker version
 ```
+
+### Updating
+
+`waker update` installs the latest release over the running binary the way install.sh does. It verifies the release's signature first, then checks that RELEASE says `waker <tag>` and that the binary matches its checksum. The new binary must also run and report that version. It then swaps the binary in atomically and keeps the old one as `waker.prev`. It prints old → new and a link to the changes, and never restarts anything: run `waker restart` to apply it. `--version vX.Y.Z` installs that release, older ones too; `--check` only says whether a newer one exists. Without `--version` it never goes back to an older release. It contacts `https://releases.nomadware.io/waker/` only (`NOMADWARE_RELEASES_BASE` overrides the host, as for install.sh). If it can't write the binary, it prints the `sudo` line.
 
 From source: `go install github.com/fum4/waker/cmd/waker@latest`.
 
@@ -309,7 +314,7 @@ systemctl --user try-restart waker    # or `start`, to bring it up now
 
 - **Linger.** A user unit runs at boot only with linger on: run `sudo loginctl enable-linger <user>` once, as part of provisioning.
 - **Replacing a hand-written unit.** install refuses a `waker.service` it didn't write. Run step 2 once with `--force`, then never again: from then on the refusal protects against clobbering.
-- **Upgrades.** Bump the version in step 1 and re-run all three steps. The upgrade restarts waker, and that restart stops the apps it started; the next request starts them again.
+- **Upgrades.** Bump the version in step 1 and re-run all three steps (or `waker update --version vX.Y.Z`, then step 3). The upgrade restarts waker, and that restart stops the apps it started; the next request starts them again.
 
 ## What it does
 
