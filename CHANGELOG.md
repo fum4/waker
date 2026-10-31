@@ -4,6 +4,11 @@ All notable changes to waker. The format follows [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-31
+
+### Fixed
+- `waker service install` wrote `WorkingDirectory` in quotes, which systemd rejects ("bad unit file setting"), so the generated user unit could not start. It is now written as a literal path.
+
 ## [0.4.0] - 2026-10-31
 
 ### Added
