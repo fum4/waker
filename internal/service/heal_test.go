@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/fum4/waker/internal/config"
@@ -37,18 +38,27 @@ func TestPlanHealReexec(t *testing.T) {
 			}
 			sp := old
 			tc.change(&sp)
-			p, reexec, err := PlanHeal(h, sp)
+			heal, err := PlanHeal(h, sp)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if reexec != tc.reexec {
-				t.Errorf("reexec = %v, want %v", reexec, tc.reexec)
+			if heal.Reexec != tc.reexec {
+				t.Errorf("reexec = %v, want %v", heal.Reexec, tc.reexec)
 			}
+			if heal.Old != renderUnit(old) {
+				t.Errorf("old = %q", heal.Old)
+			}
+			p := heal.Plan
 			if len(p.Files) != 1 || p.Files[0].Content != renderUnit(sp) {
 				t.Errorf("files = %+v", p.Files)
 			}
-			if len(p.Post) != 1 || p.Post[0].Argv[len(p.Post[0].Argv)-1] != "daemon-reload" {
-				t.Errorf("post = %v, want only daemon-reload", p.Post)
+			// install's plan with NoStart: reload and enable, never a (re)start.
+			var post []string
+			for _, c := range p.Post {
+				post = append(post, c.Argv[len(c.Argv)-2]+" "+c.Argv[len(c.Argv)-1])
+			}
+			if len(post) != 2 || !strings.HasSuffix(post[0], "daemon-reload") || post[1] != "enable "+UnitName {
+				t.Errorf("post = %q, want daemon-reload, enable", post)
 			}
 		})
 	}
@@ -57,29 +67,7 @@ func TestPlanHealReexec(t *testing.T) {
 func TestPlanHealLaunchdUnsupported(t *testing.T) {
 	h := linuxHost(t)
 	h.OS = "darwin"
-	if _, _, err := PlanHeal(h, Spec{}); !errors.Is(err, ErrUnsupported) {
+	if _, err := PlanHeal(h, Spec{}); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("err = %v", err)
-	}
-}
-
-func TestInUnit(t *testing.T) {
-	tests := []struct {
-		cgroup       string
-		user, system bool
-	}{
-		{"0::/user.slice/user-1000.slice/user@1000.service/app.slice/waker.service\n", true, false},
-		{"0::/system.slice/waker.service\n", false, true},
-		{"0::/user.slice/user-1000.slice/user@1000.service/agents.slice/claude@x.service\n", false, false},
-		{"0::/user.slice/user-1000.slice/session-3.scope\n", false, false},
-		{"12:pids:/system.slice/waker.service\n0::/system.slice/waker.service\n", false, true},
-		{"", false, false},
-	}
-	for _, tc := range tests {
-		if got := InUnit(tc.cgroup, false); got != tc.user {
-			t.Errorf("InUnit(%q, user) = %v", tc.cgroup, got)
-		}
-		if got := InUnit(tc.cgroup, true); got != tc.system {
-			t.Errorf("InUnit(%q, system) = %v", tc.cgroup, got)
-		}
 	}
 }
