@@ -17,8 +17,8 @@ func (s Service) Effective() Service {
 	return s
 }
 
-// EffectiveYAML renders the resolved service block and every app's
-// resolved config, in config order.
+// EffectiveYAML renders the resolved service and update blocks and every
+// app's resolved config, in config order.
 func (c *Config) EffectiveYAML() ([]byte, error) {
 	apps := make([]App, len(c.Apps))
 	for i, a := range c.Apps {
@@ -26,8 +26,9 @@ func (c *Config) EffectiveYAML() ([]byte, error) {
 	}
 	return yaml.Marshal(struct {
 		Service Service `yaml:"service"`
+		Update  Update  `yaml:"update"`
 		Apps    []App   `yaml:"apps"`
-	}{c.Service.Effective(), apps})
+	}{c.Service.Effective(), c.Update.Effective(), apps})
 }
 
 // MarshalYAML renders the duration the way it is written ("10s").

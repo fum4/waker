@@ -1,6 +1,6 @@
 // Package state persists what the waker learns at runtime: mode overrides
-// (modes.json), learned memory peaks (peaks.json) and serve's self-heal
-// loop guard (self-heal.json), all written
+// (modes.json), learned memory peaks (peaks.json), serve's self-heal
+// loop guard (self-heal.json) and the last release check (update.json), all written
 // atomically (temp file, fsync, rename, fsync of the directory).
 package state
 

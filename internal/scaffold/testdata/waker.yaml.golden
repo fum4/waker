@@ -20,3 +20,8 @@ apps:
 #  start:   true    # false: install and enable without (re)starting
 #  env:     {}      # extra environment, e.g. {NODE_ENV: production}
 #  user:    ""      # system: true only; default: the installing user
+
+# Whether waker looks for a newer release (one request a day to
+# releases.nomadware.io; it never installs one by itself). The default:
+# update:
+#  check: true  # false: never look (or set WAKER_NO_UPDATE_CHECK=1)

@@ -6,7 +6,7 @@ waker reads one YAML file. It takes the first of these that is set:
 2. `$WAKER_CONFIG`;
 3. `./waker.yaml`.
 
-Unknown keys are errors, so typos fail loudly. `waker check` validates the file and reports every problem at once, each with its field path, e.g. `apps[1] (api).priority: 12 must be a number from 1 to 10`. A bad value inherited from `defaults` is reported once, at its real path (`defaults.idle: must be positive`). `waker check --effective` prints the resolved `service:` block and every app's resolved config, defaults applied. Relative paths (`state_dir`, `control_socket`, `branding.logo`, `pages.*`, `cwd`) resolve against the config file's directory, and `~/` is expanded.
+Unknown keys are errors, so typos fail loudly. `waker check` validates the file and reports every problem at once, each with its field path, e.g. `apps[1] (api).priority: 12 must be a number from 1 to 10`. A bad value inherited from `defaults` is reported once, at its real path (`defaults.idle: must be positive`). `waker check --effective` prints the resolved `service:` and `update:` blocks and every app's resolved config, defaults applied. Relative paths (`state_dir`, `control_socket`, `branding.logo`, `pages.*`, `cwd`) resolve against the config file's directory, and `~/` is expanded.
 
 **Sizes** are written like `512MiB`, `2GiB` or `768M`. A unit is required, and the single-letter units are binary too (`1G` = `1GiB`). **Durations** are Go durations: `10s`, `5m`, `1h30m`.
 
@@ -14,10 +14,11 @@ Unknown keys are errors, so typos fail loudly. `waker check` validates the file 
 
 | Key | Default | Meaning |
 |---|---|---|
-| `state_dir` | `$XDG_STATE_HOME/waker`, else `~/.local/state/waker` | Holds `modes.json` (runtime mode overrides) and `peaks.json` (learned memory peaks). Created 0700. |
+| `state_dir` | `$XDG_STATE_HOME/waker`, else `~/.local/state/waker` | Holds `modes.json` (runtime mode overrides), `peaks.json` (learned memory peaks), `self-heal.json` (when serve last rewrote its unit) and `update.json` (the last release check). Created 0700. |
 | `control_socket` | `$WAKER_CONTROL_SOCKET`, else `$XDG_RUNTIME_DIR/waker/control.sock`, else `<state_dir>/control.sock` | The CLI's unix socket. Its directory is 0700 and the socket 0600. A `--system` service listens on `/run/waker/control.sock` (its `RuntimeDirectory`, via `WAKER_CONTROL_SOCKET`); when the file leaves this key out and nothing listens on the default, the CLI falls back to that socket, and `waker status` ends with the one it used. |
 | `resources` | see below | Memory policy. |
 | `service` | see below | How `waker service install` runs waker. |
+| `update` | see below | Whether waker looks for newer releases. |
 | `defaults` | – | App keys every app inherits; see below. |
 | `apps` | required | One entry per app. |
 
@@ -27,7 +28,7 @@ waker reads the file once, at start. There is no file watch and no SIGHUP.
 
 | What you change | Applies |
 |---|---|
-| any app key, `defaults`, `resources`, `state_dir`, `control_socket` | at waker's next start: `waker restart`, `systemctl --user restart waker`, a crash restart, a reboot |
+| any app key, `defaults`, `resources`, `state_dir`, `control_socket`, `update` | at waker's next start: `waker restart`, `systemctl --user restart waker`, a crash restart, a reboot |
 | `service:` | at waker's next start, the same way: on start, waker rewrites a stale unit it wrote and reloads systemd, then exits once so the supervisor restarts it when `path`, `env` or `user` changed ([README § As a service](../README.md#as-a-service), "Changing it", says when it can't and logs the command instead). `waker restart` does it at once. On launchd, only `waker restart` (or `waker service install`) applies it. Until then, `waker check`, `waker status` and waker's startup log warn that the installed unit differs, with the command to run. |
 | an app's mode or idle, at runtime | at once: `waker mode` / `waker reset` talk to the running daemon, and the override outlives restarts until reset |
 
@@ -43,6 +44,16 @@ How `waker service install` writes and runs the unit (systemd) or job (launchd).
 | `start` | `true` | `false`: install and enable without (re)starting; the caller restarts, e.g. `systemctl --user try-restart waker`. |
 | `env` | `{}` | Extra environment for waker and the apps it starts, e.g. `{NODE_ENV: production}`. `PATH` is refused: set `path`. |
 | `user` | the installing user (`$SUDO_USER` under sudo) | The account a system service runs as. Only with `system: true`. |
+
+`waker check --effective` prints the resolved block.
+
+## `update`
+
+Whether waker looks for newer releases. It never installs one by itself: `waker update` does ([README § Updating](../README.md#updating)).
+
+| Key | Default | Meaning |
+|---|---|---|
+| `check` | `true` | Once a day, one GET of `https://releases.nomadware.io/waker/latest` (no identifiers sent), recorded in `<state_dir>/update.json`. A newer release is logged by `waker serve`, printed by `waker status` (from the last check), and shown as a dim stderr line after CLI commands succeed on a terminal (not as root). Only release builds check. `false`: never. `WAKER_NO_UPDATE_CHECK=1` in the environment turns it off whatever the file says. |
 
 `waker check --effective` prints the resolved block.
 
