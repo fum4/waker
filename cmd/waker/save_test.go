@@ -146,6 +146,44 @@ func TestServiceInstallSudoHintSavesNothing(t *testing.T) {
 	}
 }
 
+// The sudo hint's --run-as pins the user: root's run saves it, so a later
+// install from a root shell (no $SUDO_USER) still runs as that user.
+func TestServiceInstallAsRootSavesTheHintsRunAs(t *testing.T) {
+	fakeHost(t, 0)
+	t.Setenv("SUDO_USER", "ana")
+	path := writeConfigFile(t, commented)
+	code, stdout, stderr := runCLI("service", "install", "--config", path, "--system", "--run-as", "ana")
+	if code != 0 {
+		t.Fatalf("= %d\n%s%s", code, stdout, stderr)
+	}
+	ran.take()
+	if got := readString(t, path); !strings.Contains(got, "service:\n  user: ana\n  system: true\n") {
+		t.Errorf("file:\n%s", got)
+	}
+}
+
+func TestInitRefusesBadServiceFlags(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "waker.yaml")
+	code, _, stderr := runCLI("init", "--yes", "--config", path, "--start", "sh", "--restart", "sometimes")
+	if code != 2 || !strings.Contains(stderr, `service.restart: "sometimes"`) {
+		t.Fatalf("= %d %q", code, stderr)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("init wrote a file with a bad service flag")
+	}
+}
+
+func TestInitSystemShowsTheSystemDefaultPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "waker.yaml")
+	if code, stdout, stderr := runCLI("init", "--yes", "--config", path, "--start", "sh", "--system"); code != 0 {
+		t.Fatalf("= %d\n%s%s", code, stdout, stderr)
+	}
+	got := readString(t, path)
+	if strings.Contains(got, "~/.local/bin") || !strings.Contains(got, "service:\n  system: true\n") {
+		t.Errorf("file:\n%s", got)
+	}
+}
+
 func TestInitWritesServiceFlags(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "waker.yaml")
 	code, stdout, stderr := runCLI("init", "--yes", "--config", path, "--start", "sh", "--restart", "on-failure", "--no-start")

@@ -13,6 +13,7 @@ func TestManagedBy(t *testing.T) {
 		{"# waker.yaml\n#managed:ansible\n\napps: []\n", "ansible"},
 		{"\n# header\n#   managed:  terraform  # why\napps: []\n", "terraform"},
 		{"apps: []\n# managed: chezmoi\n", ""}, // after the first key: not the header
+		{"%YAML 1.2\n---\n# managed: chezmoi\napps: []\n", "chezmoi"},
 		{"# manages: x\napps: []\n", ""},
 		{"", ""},
 	}

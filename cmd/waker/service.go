@@ -77,7 +77,7 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	}
 	var save *pendingSave
 	if !*sf.noSave {
-		save, err = prepareSave(cfgPath, sf.changedKeys(cfg.Service, cfgPath, h, sp))
+		save, err = prepareSave(cfgPath, sf.changedKeys(cfg.Service, settings))
 	}
 	if *dryRun {
 		plan.Print(stdout)
@@ -106,12 +106,10 @@ func runServiceInstall(args []string, stdout, stderr io.Writer) error {
 	if err := plan.Apply(serviceRunner, stdout, *force); err != nil {
 		return err
 	}
-	if err := save.write(stdout); err != nil {
-		return err
-	}
+	saveErr := save.write(stdout)
 	printNotes(stdout, plan.Notes)
 	fmt.Fprintln(stdout, "installed; check it with: waker service status")
-	return nil
+	return saveErr
 }
 
 func runServiceUninstall(args []string, stdout, stderr io.Writer) error {

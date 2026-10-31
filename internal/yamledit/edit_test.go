@@ -75,6 +75,7 @@ func TestSetRefuses(t *testing.T) {
 		{"not a mapping", "service: [a]\n", "is not a mapping"},
 		{"flow top level", "{service: {}}\n", "not a block mapping"},
 		{"empty file", "", "empty"},
+		{"two documents", "apps: []\n---\nservice: {}\n", "more than one YAML document"},
 		{"first key on the section's line", "service: &s\n  path: /a\n", ""},
 	}
 	for _, tt := range tests {

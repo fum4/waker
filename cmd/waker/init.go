@@ -115,6 +115,11 @@ func (f *initFlags) prompter(stdout io.Writer) (*prompt.Prompter, error) {
 // writeConfig collects the answers (prompting when p is set), writes the
 // file and runs waker check on it. It returns the file's absolute path.
 func writeConfig(f *initFlags, p *prompt.Prompter, stdout, stderr io.Writer) (string, error) {
+	// The service flags are checked before any question, like install's.
+	svc, err := f.service.apply(config.Service{})
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", errUsage, err)
+	}
 	path, err := filepath.Abs(config.ResolvePath(f.config))
 	if err != nil {
 		return "", err
@@ -144,7 +149,7 @@ func writeConfig(f *initFlags, p *prompt.Prompter, stdout, stderr io.Writer) (st
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
-	a.ServicePath = config.DefaultServicePath(false)
+	a.ServicePath = config.DefaultServicePath(svc.System)
 	data := a.Render()
 	if !*f.service.noSave {
 		if data, err = config.EditService(path, data, f.service.givenKeys()); err != nil {

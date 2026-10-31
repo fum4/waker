@@ -1,90 +1,56 @@
 package main
 
 import (
-	"flag"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"strings"
 
 	"github.com/fum4/waker/internal/config"
-	"github.com/fum4/waker/internal/service"
 )
 
-// pendingSave is the waker.yaml a command will write once it has
-// succeeded: its flags, saved to the service: block.
+// pendingSave is the waker.yaml a command writes once it has succeeded:
+// its flags, saved to the service: block.
 type pendingSave struct {
-	path string
-	data []byte
-	keys []config.ServiceKey
-}
-
-// keyFor is the service: key and value a service flag sets.
-func (f *serviceFlags) keyFor(name string) (string, any, bool) {
-	switch name {
-	case "system":
-		return "system", *f.system, true
-	case "no-start":
-		return "start", !*f.noStart, true
-	case "path":
-		return "path", *f.path, true
-	case "run-as":
-		return "user", *f.runAs, true
-	case "restart":
-		return "restart", *f.restart, true
-	}
-	return "", nil, false
+	path       string
+	orig, data []byte
+	keys       []config.ServiceKey
 }
 
 // givenKeys is every service flag on the command line, as its key.
 func (f *serviceFlags) givenKeys() []config.ServiceKey {
 	var keys []config.ServiceKey
-	f.fs.Visit(func(fl *flag.Flag) {
-		if k, v, ok := f.keyFor(fl.Name); ok {
-			keys = append(keys, config.ServiceKey{Key: k, Value: v})
-		}
-	})
+	for _, r := range f.given() {
+		keys = append(keys, config.ServiceKey{Key: r.key, Value: r.saved(f)})
+	}
 	return keys
 }
 
-// changedKeys is each given flag that changes the service, as its key: a
-// flag that only repeats the file or a default (the service would be the
-// same without it) isn't saved.
-func (f *serviceFlags) changedKeys(file config.Service, cfgPath string, h service.Host, final service.Spec) []config.ServiceKey {
+// changedKeys is each given flag whose key final (the block with the
+// flags applied) resolves differently from file, as its key. A flag that
+// repeats the file or a fixed default isn't saved; one that pins what the
+// environment would otherwise decide (--run-as under sudo) is.
+func (f *serviceFlags) changedKeys(file, final config.Service) []config.ServiceKey {
 	var keys []config.ServiceKey
-	for _, k := range f.givenKeys() {
-		name := flagFor(k.Key)
-		if without, err := f.applyExcept(file, name); err == nil {
-			if sp, err := serviceSpec(without, cfgPath, h); err == nil && reflect.DeepEqual(sp, final) {
-				continue
-			}
+	for _, r := range f.given() {
+		if r.resolved(final) != r.resolved(file) {
+			keys = append(keys, config.ServiceKey{Key: r.key, Value: r.saved(f)})
 		}
-		keys = append(keys, k)
 	}
 	return keys
-}
-
-// flagFor is the flag that sets a service: key.
-func flagFor(key string) string {
-	switch key {
-	case "start":
-		return "no-start"
-	case "user":
-		return "run-as"
-	}
-	return key
 }
 
 // args is the given service flags (and --no-save) as command-line
 // arguments, for setup to hand them to service install.
 func (f *serviceFlags) args() []string {
 	var args []string
-	f.fs.Visit(func(fl *flag.Flag) {
-		if _, _, ok := f.keyFor(fl.Name); ok || fl.Name == "no-save" {
-			args = append(args, "--"+fl.Name+"="+fl.Value.String())
-		}
-	})
+	for _, r := range f.given() {
+		args = append(args, "--"+r.flag+"="+f.fs.Lookup(r.flag).Value.String())
+	}
+	if *f.noSave {
+		args = append(args, "--no-save")
+	}
 	return args
 }
 
@@ -102,16 +68,24 @@ func prepareSave(path string, keys []config.ServiceKey) (*pendingSave, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pendingSave{path: path, data: data, keys: keys}, nil
+	return &pendingSave{path: path, orig: src, data: data, keys: keys}, nil
 }
 
-// write saves the file and says what changed.
+// write saves the file and says what changed. A file edited since
+// prepareSave read it is left alone: the edit wins over the flags.
 func (s *pendingSave) write(stdout io.Writer) error {
 	if s == nil {
 		return nil
 	}
-	if err := config.WriteFile(s.path, s.data); err != nil {
-		return fmt.Errorf("save the flags to %s: %w", s.path, err)
+	now, err := os.ReadFile(s.path)
+	if err == nil && !bytes.Equal(now, s.orig) {
+		err = fmt.Errorf("it changed while waker installed")
+	}
+	if err == nil {
+		err = config.WriteFile(s.path, s.data)
+	}
+	if err != nil {
+		return fmt.Errorf("installed, but %s isn't saved to %s (%v); the file and the unit differ until you add it or install again", s.describe(), s.path, err)
 	}
 	fmt.Fprintf(stdout, "saved %s to %s (--no-save: this run only)\n", s.describe(), s.path)
 	return nil

@@ -5,10 +5,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 
 	"github.com/fum4/waker/internal/yamledit"
 )
@@ -18,11 +16,15 @@ import (
 var managedPattern = regexp.MustCompile(`^#\s*managed:\s*(\S+)`)
 
 // ManagedBy is the tool a `# managed: <tool>` line in src's header
-// comment (the comment lines before the first key) names, or "".
+// comment (the comment lines before the first key; a `---` or `%YAML`
+// line may come first) names, or "".
 func ManagedBy(src []byte) string {
 	sc := bufio.NewScanner(bytes.NewReader(src))
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
+		if line == "---" || strings.HasPrefix(line, "%") {
+			continue
+		}
 		if line != "" && !strings.HasPrefix(line, "#") {
 			return ""
 		}
@@ -64,37 +66,18 @@ func EditService(path string, src []byte, keys []ServiceKey) ([]byte, error) {
 	return src, nil
 }
 
-// WriteFile replaces the file at path (following a symlink to the real
-// file) with data atomically, keeping its mode and, when root writes it,
-// its owner.
+// WriteFile rewrites the existing file at path in place. In place, not a
+// temp file renamed over it: the file keeps its inode, so its owner, mode,
+// ACLs, hard links and a symlink to it all stay, and its directory needs
+// no write permission. A config is a few KiB, written in one call.
 func WriteFile(path string, data []byte) error {
-	real, err := filepath.EvalSymlinks(path)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0)
 	if err != nil {
 		return err
 	}
-	info, err := os.Stat(real)
-	if err != nil {
+	if _, err := f.Write(data); err != nil {
+		f.Close()
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(real), "."+filepath.Base(real)+".*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name()) // a no-op once renamed
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp.Name(), info.Mode().Perm()); err != nil {
-		return err
-	}
-	if st, ok := info.Sys().(*syscall.Stat_t); ok && os.Geteuid() == 0 {
-		if err := os.Chown(tmp.Name(), int(st.Uid), int(st.Gid)); err != nil {
-			return err
-		}
-	}
-	return os.Rename(tmp.Name(), real)
+	return f.Close()
 }

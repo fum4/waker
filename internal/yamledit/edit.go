@@ -4,8 +4,10 @@
 package yamledit
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 
 	"go.yaml.in/yaml/v3"
@@ -38,9 +40,13 @@ func Set(src []byte, section, key string, value any) ([]byte, error) {
 
 // rootMapping is the document's top-level block mapping.
 func rootMapping(src []byte) (*yaml.Node, error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(src, &doc); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(src))
+	var doc, next yaml.Node
+	if err := dec.Decode(&doc); err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
+	}
+	if err := dec.Decode(&next); !errors.Is(err, io.EOF) {
+		return nil, errors.New("the file holds more than one YAML document")
 	}
 	if len(doc.Content) == 0 {
 		return nil, errors.New("the file is empty")
