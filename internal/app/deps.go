@@ -38,6 +38,9 @@ func (a *App) keptUp() bool { return len(a.KeptUpBy()) > 0 }
 // bootAfterDeps is the boot of an app with dependencies: wake them all,
 // then admit and start it, the whole boot within boot_timeout.
 func (a *App) bootAfterDeps() {
+	if a.cfg.Worker() && a.Started() {
+		a.Stop("worker unhealthy")
+	}
 	deadline := a.d.Clock.Now().Add(a.cfg.BootTimeout.D())
 	if problem := a.awaitDeps(deadline); problem != "" {
 		a.settle(false, problem)

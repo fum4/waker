@@ -128,7 +128,9 @@ type App struct {
 }
 
 // HeartbeatEnabled reports whether heartbeat injection is on for the app.
-func (a App) HeartbeatEnabled() bool { return a.Heartbeat == nil || *a.Heartbeat }
+func (a App) HeartbeatEnabled() bool { return !a.Worker() && (a.Heartbeat == nil || *a.Heartbeat) }
+
+func (a App) Worker() bool { return a.Listen == "" && a.Upstream == "" }
 
 // IsEvictable reports whether the app's own config allows evicting it.
 func (a App) IsEvictable() bool { return a.Evictable == nil || *a.Evictable }

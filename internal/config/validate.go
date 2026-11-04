@@ -119,11 +119,29 @@ func (a App) validate(field string, add addFunc) {
 	if !namePattern.MatchString(a.Name) {
 		add(field+".name", "%q must be lowercase letters, digits and dashes", a.Name)
 	}
-	if _, port, err := net.SplitHostPort(a.Listen); err != nil || port == "" {
-		add(field+".listen", "%q is not a host:port address", a.Listen)
-	}
-	if u, err := url.Parse(a.Upstream); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		add(field+".upstream", "%q is not an http(s)://host:port URL", a.Upstream)
+	if (a.Listen == "") != (a.Upstream == "") {
+		missing := ".listen"
+		if a.Listen != "" {
+			missing = ".upstream"
+		}
+		add(field+missing, "set listen and upstream together for HTTP, or omit both for a worker")
+	} else if !a.Worker() {
+		if _, port, err := net.SplitHostPort(a.Listen); err != nil || port == "" {
+			add(field+".listen", "%q is not a host:port address", a.Listen)
+		}
+		if u, err := url.Parse(a.Upstream); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			add(field+".upstream", "%q is not an http(s)://host:port URL", a.Upstream)
+		}
+	} else {
+		if a.Mode != ModeOn {
+			add(field+".mode", "workers require explicit mode: on; use waker mode off for an operator override")
+		}
+		if a.Health.Path != "" {
+			add(field+".health.path", "workers have no HTTP upstream; remove path and set health.command")
+		}
+		if len(a.Health.Command) == 0 {
+			add(field+".health.command", "workers require an argv command that exits 0 when healthy")
+		}
 	}
 	if len(a.Start) == 0 || a.Start[0] == "" {
 		add(field+".start", "an argv list is required, e.g. [\"./run\", \"--port\", \"3000\"]")
@@ -167,8 +185,10 @@ func (a App) validate(field string, add addFunc) {
 		add(field+".stop_timeout", "must be positive")
 	}
 	a.Health.validate(field+".health", add)
-	a.Branding.validate(field+".branding", add)
-	a.Pages.validate(field+".pages", add)
+	if !a.Worker() {
+		a.Branding.validate(field+".branding", add)
+		a.Pages.validate(field+".pages", add)
+	}
 	a.validateMemorySource(field, add)
 	a.validateSchedule(field, add)
 }

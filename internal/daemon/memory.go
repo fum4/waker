@@ -18,7 +18,7 @@ const SampleInterval = 5 * time.Second
 // procfs is where process-tree sampling reads from.
 const procfs = "/proc"
 
-// newGate builds the memory gate over the listening apps, starting from
+// newGate builds the memory gate over the managed apps, starting from
 // the learned peaks in peaks.json (a corrupt file is logged and ignored).
 func (d *Daemon) newGate() *evict.Gate {
 	learned := map[string]int64{}
@@ -34,7 +34,7 @@ func (d *Daemon) newGate() *evict.Gate {
 	d.budget = memory.NewBudget(d.cfg.Resources, learned)
 	d.sampler = memory.NewSampler()
 	return &evict.Gate{
-		Apps:   func() []*app.App { return d.listening },
+		Apps:   func() []*app.App { return d.managed },
 		Budget: d.budget,
 		Avail:  d.avail,
 		Policy: d.cfg.Resources.Eviction,
@@ -51,7 +51,7 @@ func (d *Daemon) sample(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			for _, a := range d.listening {
+			for _, a := range d.managed {
 				d.sampleOne(a)
 			}
 		}

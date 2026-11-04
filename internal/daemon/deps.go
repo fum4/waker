@@ -47,12 +47,12 @@ func wireDependencies(all []*app.App) []*app.App {
 	return order
 }
 
-// ticked returns the apps the idle loop manages: every listening app, plus
+// ticked returns the apps the idle loop manages: every managed app, plus
 // a dependency whose listener didn't bind but that a dependent's boot started.
 func (d *Daemon) ticked() []*app.App {
-	apps := slices.Clone(d.listening)
+	apps := slices.Clone(d.managed)
 	for _, a := range d.all {
-		if !slices.Contains(d.listening, a) && a.Started() {
+		if !slices.Contains(d.managed, a) && a.Started() {
 			apps = append(apps, a)
 		}
 	}

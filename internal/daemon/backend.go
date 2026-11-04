@@ -17,11 +17,11 @@ import (
 
 // Status implements control.Backend.
 func (d *Daemon) Status(ctx context.Context) control.Report {
-	r := control.Report{Version: version.String(), Policy: d.policy(), Apps: make([]app.Snapshot, 0, len(d.listening))}
+	r := control.Report{Version: version.String(), Policy: d.policy(), Apps: make([]app.Snapshot, 0, len(d.managed))}
 	if u, err := state.LoadUpdate(d.cfg.StateDir); err == nil {
 		r.Update = &u
 	}
-	for _, a := range d.listening {
+	for _, a := range d.managed {
 		r.Apps = append(r.Apps, d.withMemory(a, a.Snapshot(ctx)))
 	}
 	return r
@@ -40,8 +40,8 @@ func (d *Daemon) Health() control.Health {
 // SetMode implements control.Backend.
 func (d *Daemon) SetMode(name string, mode *config.Mode, idle time.Duration) (app.Snapshot, error) {
 	var target *app.App
-	names := make([]string, 0, len(d.listening))
-	for _, a := range d.listening {
+	names := make([]string, 0, len(d.managed))
+	for _, a := range d.managed {
 		names = append(names, a.Name())
 		if a.Name() == name {
 			target = a
@@ -73,16 +73,20 @@ func (d *Daemon) loadOverrides() map[string]state.Override {
 		d.log.Error("overrides unreadable, starting with the declared modes", "err", err)
 		return map[string]state.Override{}
 	}
-	known := map[string]bool{}
+	known := map[string]config.App{}
 	for _, a := range d.cfg.Apps {
-		known[a.Name] = true
+		known[a.Name] = a
 	}
 	for name, o := range all {
-		if !known[name] {
+		ac, exists := known[name]
+		if !exists {
 			d.log.Warn("dropping the override of an app no longer configured", "app", name)
 			delete(all, name)
 		} else if p := o.Problem(); p != "" {
 			d.log.Warn("dropping an invalid override", "app", name, "problem", p)
+			delete(all, name)
+		} else if ac.Worker() && o.Mode == config.ModeOnDemand {
+			d.log.Warn("dropping an on-demand override: workers support only on or off", "app", name)
 			delete(all, name)
 		}
 	}

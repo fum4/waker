@@ -151,7 +151,7 @@ func (a *App) applyDefaults() {
 	if a.StopTimeout == 0 {
 		a.StopTimeout = Duration(DefaultStopTimeout)
 	}
-	if a.Health.Path == "" && len(a.Health.Command) == 0 {
+	if !a.Worker() && a.Health.Path == "" && len(a.Health.Command) == 0 {
 		a.Health.Path = DefaultHealthPath
 	}
 	if a.Health.Interval == 0 {

@@ -123,4 +123,5 @@ memory:    need 900 + headroom(linear p7.5) 1422 = 2322 MiB required to boot (ne
   - Overrides for apps no longer configured are dropped.
   - Setting the declared mode removes the override, except on an app with a `schedule`: there it pins that mode through windows until `waker reset`.
 - **Startup.** `on` apps that aren't healthy are booted, apps inside a schedule window included. A listener that can't bind (port in use) is skipped and reported by `waker status`; the other apps still run.
+- **Workers.** Apps without `listen` and `upstream` are managed without an HTTP listener. They require declared `on` and command health, are supervised at `health.interval`, and retry failed boots after the normal 120-second cooldown. Operator `off` persists; reset restores `on`. Runtime and stored `on-demand` overrides cannot make a worker wait for traffic. See [configuration](configuration.md#portless-workers).
 - **Shutdown.** On SIGTERM/SIGINT, waker drains connections for up to 5 s, then stops every app it started, dependents before their dependencies.
