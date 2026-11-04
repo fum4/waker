@@ -69,6 +69,12 @@ func (a *App) followSchedule() {
 // NextEventIn is how long the idle loop may sleep for this app: until its
 // idle stop or its next schedule boundary, whichever is sooner.
 func (a *App) NextEventIn() (time.Duration, bool) {
+	if a.cfg.Worker() && a.Mode() == config.ModeOn {
+		a.mu.Lock()
+		left := max(0, a.workerCheckAt.Sub(a.d.Clock.Now()))
+		a.mu.Unlock()
+		return left, true
+	}
 	left, ok := a.DeadlineIn()
 	now := a.d.Clock.Now()
 	if b, has := a.sched.Boundary(now); has {

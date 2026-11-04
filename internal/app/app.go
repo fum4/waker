@@ -85,14 +85,16 @@ type App struct {
 	mu       sync.Mutex
 	override *state.Override
 	// lastMode is the effective mode Tick (or SetMode) last acted on.
-	lastMode     config.Mode
-	booting      bool
-	bootDone     chan struct{} // closed when the current (or last) boot ends
-	bootErr      string
-	bootFailedAt time.Time
-	busy         bool
-	started      bool
-	evicted      *Eviction
+	lastMode       config.Mode
+	booting        bool
+	bootDone       chan struct{} // closed when the current (or last) boot ends
+	bootErr        string
+	bootFailedAt   time.Time
+	workerCheckAt  time.Time
+	workerChecking bool
+	busy           bool
+	started        bool
+	evicted        *Eviction
 }
 
 // Eviction records the last time another app stopped this one for memory.

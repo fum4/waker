@@ -75,6 +75,10 @@ func (a *App) DeadlineIn() (time.Duration, bool) {
 // but running app is stopped too.
 func (a *App) Tick() {
 	a.followSchedule()
+	if a.cfg.Worker() {
+		a.maintainWorker()
+		return
+	}
 	a.mu.Lock()
 	if a.modeLocked() != config.ModeOnDemand || a.booting {
 		a.mu.Unlock()
@@ -98,6 +102,9 @@ func (a *App) Tick() {
 // through windows. Switching to off stops the app in the background; to
 // on, wakes it.
 func (a *App) SetMode(mode *config.Mode, idle time.Duration) error {
+	if a.cfg.Worker() && mode != nil && *mode == config.ModeOnDemand {
+		return &InputError{"workers support only on or off; use reset to restore declared mode on"}
+	}
 	var o *state.Override
 	same := mode != nil && *mode == a.cfg.Mode && (idle == 0 || idle == a.cfg.Idle.D())
 	if mode != nil && !(same && a.sched.Empty()) {

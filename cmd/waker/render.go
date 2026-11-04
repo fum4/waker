@@ -14,7 +14,12 @@ import (
 
 // renderStatus prints one app the way `waker status` shows it.
 func renderStatus(w io.Writer, s app.Snapshot, now time.Time) {
-	fmt.Fprintf(w, "%s — %s → %s\n", s.Name, s.Listen, s.Upstream)
+	worker := s.Listen == "" && s.Upstream == ""
+	if worker {
+		fmt.Fprintf(w, "%s — worker\n", s.Name)
+	} else {
+		fmt.Fprintf(w, "%s — %s → %s\n", s.Name, s.Listen, s.Upstream)
+	}
 	line(w, "mode", modeText(s, now))
 	if s.Schedule != nil {
 		line(w, "schedule", scheduleText(*s.Schedule, s.OverrideSince != nil, now))
@@ -31,7 +36,9 @@ func renderStatus(w io.Writer, s app.Snapshot, now time.Time) {
 	if s.IdleIn != nil {
 		act += " · idle stop in " + ago(s.IdleIn.D())
 	}
-	line(w, "activity", act)
+	if !worker {
+		line(w, "activity", act)
+	}
 	if len(s.DependsOn) > 0 {
 		line(w, "needs", strings.Join(s.DependsOn, ", "))
 	}
@@ -50,7 +57,9 @@ func renderStatus(w io.Writer, s app.Snapshot, now time.Time) {
 	if !s.Heartbeat {
 		hb = "off (heartbeat: false)"
 	}
-	line(w, "heartbeat", hb)
+	if !worker {
+		line(w, "heartbeat", hb)
+	}
 }
 
 // renderPolicy prints the effective resource policy above the apps.

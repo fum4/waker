@@ -36,7 +36,7 @@ func (a *App) Wake(ctx context.Context) State {
 	// Claim the boot before asking the gate, which may read other apps:
 	// holding our lock across it could deadlock two apps waking each other.
 	a.claimBootLocked()
-	if len(a.deps) > 0 {
+	if len(a.deps) > 0 || a.cfg.Worker() {
 		// Admitted only once its dependencies are up: a reservation taken now
 		// would count against their own boots.
 		a.bootErr, a.bootFailedAt, a.busy = "", timeZero, false
@@ -146,13 +146,18 @@ func (a *App) settle(busy bool, errMsg string) {
 // start launches the app and polls health until it answers, the start
 // command fails, or deadline (boot_timeout from the boot's start) passes. It
 // returns an error message or "".
-func (a *App) start(deadline time.Time) string {
+func (a *App) start(deadline time.Time) (problem string) {
 	a.life.Lock()
 	exit, err := a.d.Process.Start()
 	a.life.Unlock()
 	if err != nil {
 		return err.Error()
 	}
+	defer func() {
+		if a.cfg.Worker() && problem != "" {
+			a.Stop("worker boot failed")
+		}
+	}()
 	ctx := context.Background()
 	for {
 		if a.Healthy(ctx) {

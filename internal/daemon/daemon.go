@@ -47,6 +47,7 @@ type Daemon struct {
 	overrides map[string]state.Override
 	peaks     map[string]state.Peak
 	listening []*app.App // apps whose listener bound, in config order
+	managed   []*app.App
 	skipped   map[string]string
 
 	// ready runs once the listeners and the control socket are up.
@@ -72,6 +73,9 @@ func newWithClock(cfg *config.Config, log *slog.Logger, clk clock.Clock) (*Daemo
 	}
 	d.avail = avail
 	for _, ac := range cfg.Apps {
+		if ac.Worker() {
+			continue
+		}
 		pg, err := pages.New(ac)
 		if err != nil {
 			return nil, fmt.Errorf("app %s: %w", ac.Name, err)
@@ -105,7 +109,7 @@ func newWithClock(cfg *config.Config, log *slog.Logger, clk clock.Clock) (*Daemo
 // this waker started (its children would otherwise be orphaned).
 func (d *Daemon) Run(ctx context.Context) error {
 	servers := d.listen()
-	if len(servers) == 0 {
+	if len(d.managed) == 0 {
 		return errors.New("no app listener could bind")
 	}
 	ctl, err := control.Listen(d.cfg.ControlSocket)
@@ -115,15 +119,14 @@ func (d *Daemon) Run(ctx context.Context) error {
 	ctlSrv := &http.Server{Handler: control.Handler(d, d.log), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = ctlSrv.Serve(ctl) }()
 	servers = append(servers, ctlSrv)
-	d.log.Info("waker serving", "apps", len(d.listening), "control", d.cfg.ControlSocket)
-	if d.ready != nil {
-		d.ready()
-	}
-
-	for _, a := range d.listening {
+	d.log.Info("waker serving", "apps", len(d.managed), "listeners", len(d.listening), "control", d.cfg.ControlSocket)
+	for _, a := range d.managed {
 		if a.Mode() == config.ModeOn {
 			a.Wake(ctx)
 		}
+	}
+	if d.ready != nil {
+		d.ready()
 	}
 	go d.sample(ctx)
 	idle.Loop(ctx, d.sig, d.step)
@@ -147,6 +150,10 @@ func (d *Daemon) listen() []*http.Server {
 	var servers []*http.Server
 	for _, a := range d.all {
 		ac := a.Config()
+		if ac.Worker() {
+			d.managed = append(d.managed, a)
+			continue
+		}
 		ln, err := net.Listen("tcp", ac.Listen)
 		if err != nil {
 			d.log.Warn("listener skipped: the app stays unmanaged", "app", ac.Name, "err", err)
@@ -163,6 +170,7 @@ func (d *Daemon) listen() []*http.Server {
 		go func() { _ = srv.Serve(proxy.LimitListener(ln, proxy.MaxConnections, ac.Pages.Bare)) }()
 		servers = append(servers, srv)
 		d.listening = append(d.listening, a)
+		d.managed = append(d.managed, a)
 	}
 	return servers
 }

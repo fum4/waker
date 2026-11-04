@@ -81,19 +81,19 @@ defaults:
 | Key | Default | Meaning |
 |---|---|---|
 | `name` | required | Lowercase letters, digits and dashes; unique. It is shown under the indicator on visitor pages. |
-| `listen` | required | `host:port` that waker serves the app on; unique. |
-| `upstream` | required | `http(s)://host:port` where the app serves. |
+| `listen` | HTTP only | `host:port` that waker serves the app on; unique. Set together with `upstream`, or omit both for a worker. |
+| `upstream` | HTTP only | `http(s)://host:port` where the app serves. Set together with `listen`, or omit both for a worker. |
 | `start` | required | Argv list, run without a shell, in its own process group. It may stay in the foreground (it is the app), or exit 0 after handing off to a service manager. A non-zero exit before the app is healthy fails the boot. |
 | `stop` | `[]` | Argv list run to stop the app. After it, whatever is left of the started process group gets SIGTERM, then SIGKILL after `stop_timeout`. With no `stop`, only the signals are used. |
 | `stop_timeout` | `10s` | Bounds the stop command and the wait between SIGTERM and SIGKILL. |
 | `cwd`, `env` | waker's | The working directory and extra environment for `start`, `stop` and the health command. |
-| `health.path` | `/` | GET on the upstream. Any status below 400 means up; redirects aren't followed and count as up. |
-| `health.command` | – | Argv instead of `path`; exit 0 means up. |
-| `health.interval` / `health.timeout` | `1s` / `2s` | How often health is polled while booting, and how long one probe may take. |
+| `health.path` | `/` for HTTP | GET on the upstream. Any status below 400 means up; redirects aren't followed and count as up. Not allowed for workers. |
+| `health.command` | – | Argv instead of `path`; exit 0 means up. Required for workers. |
+| `health.interval` / `health.timeout` | `1s` / `2s` | How often health is polled while booting (also while supervising a worker), and how long one probe may take. |
 | `boot_timeout` | `600s` | A boot that isn't healthy by then fails. A failed boot answers "failed" for 120 s before the next request may retry. |
 | `waiting` | `page` | What a browser gets while the app boots: `page` (the starting page at once) or `hold` (the request waits for the app, like a program's). Programs are always held; see [behaviour.md](behaviour.md#a-request-step-by-step). |
 | `hold_timeout` | `60s`, or `boot_timeout` if shorter | How long a held request waits. Then a browser gets the failed page and a program 503 `{"state":"starting"}`; the boot carries on. Set explicitly, it may not exceed `boot_timeout`. |
-| `mode` | `on-demand` | `on`, `off` or `on-demand`. Bare `on` and `off` work: waker reads YAML 1.2, where they are strings. A YAML 1.1 tool (PyYAML, yq v3) that rewrites the file may turn them into `true` / `false`; `waker check` then says which one to write back. |
+| `mode` | `on-demand` for HTTP | `on`, `off` or `on-demand`. Workers must explicitly declare `on` (per app or through `defaults`). Bare `on` and `off` work: waker reads YAML 1.2, where they are strings. A YAML 1.1 tool (PyYAML, yq v3) that rewrites the file may turn them into `true` / `false`; `waker check` then says which one to write back. |
 | `idle` | `30m` | On-demand only: stop after this long without activity. |
 | `idle_ignore` | `[]` | Exact paths (query excluded) that are neither activity nor a reason to wake, e.g. a version poller. |
 | `heartbeat` | `true` | Inject the heartbeat script into the app's HTML pages. |
@@ -106,6 +106,50 @@ defaults:
 | `pages` | built-in | Your own HTML file per visitor page, or `bare` for status and headers only; see below. |
 | `depends_on` | `[]` | Apps woken before this one and kept up while it is; see below. |
 | `schedule` | `[]` | Windows that keep the app on, whatever its mode: a list of `{cron, for}`; see below. |
+
+## Portless workers
+
+There is no `kind` key. Both `listen` and `upstream` present means an HTTP app;
+both omitted means a worker. Exactly one is an error: add its partner for HTTP,
+or remove it for a worker. HTTP defaults and listener-conflict handling are
+unchanged.
+
+```yaml
+apps:
+  - name: queue-worker
+    mode: on
+    start: [./bin/queue-worker, run]
+    health:
+      command: [./bin/queue-worker, health]
+      interval: 5s
+      timeout: 2s
+    memory: 256MiB
+```
+
+Replace these commands with your worker's start and real readiness check.
+Workers require `health.command`; `health.path` is invalid, including one
+inherited from `defaults`. An app-level command replaces an inherited path.
+No default HTTP probe, listener, proxy, visitor pages or heartbeat is created.
+Presentation settings (`branding`, `pages`, `waiting`, `hold_timeout`,
+`heartbeat`) have no effect on a worker; shared page files aren't loaded for it.
+
+Workers start automatically in `on`. Health is checked every `health.interval`;
+an unhealthy worker waker started is stopped before restarting. A failed boot
+is cleaned up and retried after the normal 120-second boot cooldown; a memory
+refusal is retried on the next health interval. Boot and health timeouts still
+apply. Memory admission, sampling, learned peaks, dependencies and orderly
+shutdown use the same lifecycle as HTTP apps. As with other `on` apps, workers
+are never idle-stopped or evicted.
+
+`waker mode queue-worker off` persists an operator pause;
+`waker reset queue-worker` clears it and restores declared `on`.
+Runtime `on` is also allowed. `on-demand` is rejected without changing the
+current override. Stored `on-demand` overrides are logged and ignored at
+startup, so a worker never waits for a request it cannot receive. Valid stored
+`off` overrides survive restart. `waker status` includes workers with empty
+listen/upstream values in JSON and a `worker` label in text. The control
+socket's `GET /health` lists only actual HTTP listeners, so a healthy
+worker-only daemon has an empty listeners list.
 
 ## `resources`
 

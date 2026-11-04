@@ -38,12 +38,16 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "APP\tLISTEN\tUPSTREAM\tMODE\tIDLE\tPRIORITY\tMEMORY")
 	for _, a := range cfg.Apps {
+		listen, upstream := a.Listen, a.Upstream
+		if a.Worker() {
+			listen, upstream = "- (worker)", "-"
+		}
 		mem := "-"
 		if a.Memory > 0 {
 			mem = a.Memory.String()
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%g\t%s\n",
-			a.Name, a.Listen, a.Upstream, a.Mode, a.Idle, a.Priority, mem)
+			a.Name, listen, upstream, a.Mode, a.Idle, a.Priority, mem)
 	}
 	if err := tw.Flush(); err != nil {
 		return err

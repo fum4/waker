@@ -6,6 +6,25 @@ Scale-to-zero for self-hosted apps: waker starts an app on its first request and
 
 Install one static binary (about 11 MB for linux/amd64), point a few lines of YAML at your app, and run it. No containers, no database, no external services: any app that starts from a command works.
 
+Portless background workers work too: omit **both** `listen` and `upstream`,
+declare `mode: on`, and supply a command health check. No dummy HTTP server,
+visitor pages or proxy is created:
+
+```yaml
+apps:
+  - name: mail-worker
+    mode: on
+    start: [./bin/mail-worker, run]
+    health: {command: [./bin/mail-worker, health]}
+```
+
+Use your worker's real readiness command (exit 0 means healthy). Workers start
+with waker, restart when unhealthy, and retry failed boots after the existing
+120-second cooldown. `waker mode mail-worker off` pauses one;
+`waker reset mail-worker` restores `on`. Workers cannot use `on-demand`;
+setting only one of `listen` / `upstream` is a configuration error. See the
+[worker reference](docs/configuration.md#portless-workers).
+
 ## Quickstart
 
 **1. Install**
@@ -164,16 +183,17 @@ Sizes take a unit (`512MiB`, `2GiB`, `768M`; `0` needs none). Durations are Go d
 
 | Key | Default | Meaning |
 |---|---|---|
-| `name` · `listen` · `upstream` · `start` | required | Identity, waker's address, the app's address, the start argv. |
+| `name` · `start` | required | Identity and the start argv. |
+| `listen` · `upstream` | HTTP only | Waker's address and the app's address; set both for HTTP, omit both for a worker. |
 | `stop` | `[]` | Stop argv; SIGTERM → SIGKILL follows either way. |
 | `stop_timeout` | `10s` | Bounds the stop command and SIGTERM → SIGKILL. |
 | `cwd` · `env` | waker's | Working directory and extra environment. |
-| `health.path` · `health.command` | `/` · – | Up = GET below 400, or the command exits 0. |
-| `health.interval` · `health.timeout` | `1s` · `2s` | Poll rate while booting; one probe's limit. |
+| `health.path` · `health.command` | `/` for HTTP · – | Up = GET below 400, or the command exits 0. Workers require a command, with no path. |
+| `health.interval` · `health.timeout` | `1s` · `2s` | Poll rate while booting or supervising a worker; one probe's limit. |
 | `boot_timeout` | `600s` | Not healthy by then = failed (then 120 s cooldown). |
 | `waiting` | `page` | Browsers during a boot: starting page, or `hold`. |
 | `hold_timeout` | `60s`, or `boot_timeout` if shorter | How long a held request waits. |
-| `mode` | `on-demand` | `on` · `off` · `on-demand`. |
+| `mode` | `on-demand` for HTTP | `on` · `off` · `on-demand`. Workers must declare `on`; runtime `off` pauses them. |
 | `idle` | `30m` | On-demand: stop after this long without activity. |
 | `idle_ignore` | `[]` | Paths that never count as activity or wake. |
 | `heartbeat` | `true` | Inject the keep-awake script into HTML pages. |
