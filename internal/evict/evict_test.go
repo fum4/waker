@@ -99,6 +99,7 @@ func newWorld(policy config.Eviction) *world {
 // add creates an app declaring memory MiB that really uses size MiB.
 func (w *world) add(name string, priority float64, declared, size int64, mutate ...func(*config.App)) *app.App {
 	ac := config.App{Name: name, Mode: config.ModeOnDemand, Priority: priority, Memory: config.Size(declared) * config.MiB,
+		Listen: "127.0.0.1:8080", Upstream: "http://127.0.0.1:3000",
 		Idle: config.Duration(time.Hour), BootTimeout: config.Duration(time.Minute), Health: config.Health{Path: "/", Interval: config.Duration(time.Second)}}
 	for _, m := range mutate {
 		m(&ac)
