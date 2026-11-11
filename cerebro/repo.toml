@@ -1,0 +1,19 @@
+# waker as a repo, for cerebro (cerebro plan § 8.1).
+
+[repo]
+name = "waker"
+
+[merge]
+by = "agents"
+approval_paths = [
+  "cerebro/**",
+  ".github/workflows/**",
+  "infra/terraform/**",
+  "infra/github/**",
+  "secrets/manifest",
+  "**/migrations/**",
+]
+
+[gates]
+pre-push = "mise run pre-push"
+pre-merge = "mise run pre-merge"
