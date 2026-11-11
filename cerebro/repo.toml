@@ -9,6 +9,7 @@ approval_paths = [
   "cerebro/**",
   ".github/workflows/**",
   "infra/terraform/**",
+  "infra/github/**",
   "secrets/manifest",
   "**/migrations/**",
 ]
